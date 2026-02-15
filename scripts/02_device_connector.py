@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-BLE Device Connector and GATT Explorer
-Connects to a specific BLE device and explores its GATT structure.
+BLE Device Connector - Simpler approach with file output
 """
 
 import asyncio
@@ -9,112 +8,138 @@ import sys
 from bleak import BleakClient
 
 
-async def explore_device(mac_address):
-    """Connect to device and explore GATT structure."""
-    print(f"Connecting to device {mac_address}...")
-    print(f"Timeout: 15 seconds")
-    print("-" * 100)
+async def connect_and_explore(mac_address):
+    """Connect to device and explore GATT."""
+    output_file = f"/tmp/{mac_address.replace(':', '_')}_gatt.txt"
     
-    client = BleakClient(mac_address)
-    
-    try:
-        # Try to connect with timeout
+    with open(output_file, "w") as f:
+        f.write(f"Connecting to {mac_address}...\n")
+        f.write("=" * 100 + "\n\n")
+        f.flush()
+        
         try:
-            await asyncio.wait_for(client.connect(), timeout=15)
-        except asyncio.TimeoutError:
-            print("Connection timed out after 15 seconds")
-            return
-        except Exception as e:
-            print(f"Connection error: {e}")
-            return
+            f.write("Creating client...\n")
+            f.flush()
             
-        print(f"✓ Connected to {client.address}")
-        print()
-        
-        # Get all services
-        services = await client.get_services()
-        print(f"Found {len(services)} service(s):\n")
-        
-        for service in services:
-            print(f"Service: {service.uuid}")
-            print(f"  Description: {service.description if hasattr(service, 'description') else 'N/A'}")
+            client = BleakClient(mac_address)
             
-            # Get all characteristics for this service
-            characteristics = service.characteristics
-            print(f"  Characteristics ({len(characteristics)}):")
+            f.write("Calling connect()...\n")
+            f.flush()
             
-            for char in characteristics:
-                print(f"    - {char.uuid}")
-                print(f"        Properties: {char.properties}")
+            try:
+                # Try to connect with timeout
+                f.write("Waiting for connection (20 second timeout)...\n")
+                f.flush()
                 
-                # Try to read the characteristic if it has read permission
-                if "read" in char.properties:
+                await asyncio.wait_for(client.connect(), timeout=20)
+                
+                f.write(f"✓ Connected!\n\n")
+                f.flush()
+            except asyncio.TimeoutError:
+                f.write("✗ Connection timeout (20 seconds exceeded)\n")
+                f.flush()
+                return
+            except Exception as e:
+                f.write(f"✗ Connection error: {e}\n")
+                f.flush()
+                return
+            
+            # Get services
+            try:
+                f.write("Getting services...\n")
+                f.flush()
+                
+                # Perform service discovery (handle different bleak versions)
+                if hasattr(client, "get_services"):
                     try:
-                        value = await client.read_gatt_char(char.uuid)
-                        print(f"        Value (hex): {value.hex()}")
-                        print(f"        Value (bytes): {value}")
-                        # Try to decode as string if possible
-                        try:
-                            print(f"        Value (ASCII): {value.decode('utf-8', errors='ignore')}")
-                        except:
-                            pass
-                    except Exception as e:
-                        print(f"        Value: [Error reading - {e}]")
+                        services = await client.get_services()
+                    except TypeError:
+                        # Some bleak versions expose get_services as a regular method
+                        services = client.get_services()
+                else:
+                    # Fallback: client.services may be populated after connect
+                    services = client.services
+
+                service_list = list(services)
+                f.write(f"\nFound {len(service_list)} services:\n\n")
+                f.flush()
                 
-                # List descriptors
-                if char.descriptors:
-                    print(f"        Descriptors:")
-                    for descriptor in char.descriptors:
-                        print(f"          - {descriptor.uuid}")
-                
-                print()
+                for service in service_list:
+                    f.write(f"Service: {service.uuid}\n")
+                    f.write(f"  Handle: {service.handle}\n")
+                    f.write(f"  Characteristics: {len(service.characteristics)}\n\n")
+                    f.flush()
+                    
+                    for char in service.characteristics:
+                        f.write(f"    Characteristic: {char.uuid}\n")
+                        f.write(f"      Handle: {char.handle}\n")
+                        f.write(f"      Properties: {char.properties}\n")
+                        f.flush()
+                        
+                        # Try to read
+                        if "read" in char.properties:
+                            try:
+                                value = await client.read_gatt_char(char.uuid)
+                                f.write(f"      Value (hex): {value.hex()}\n")
+                                f.write(f"      Value (len): {len(value)} bytes\n")
+                                if len(value) <= 32:
+                                    try:
+                                        ascii_val = value.decode('utf-8', errors='ignore').replace('\x00', '')
+                                        if ascii_val:
+                                            f.write(f"      Value (ASCII): {ascii_val}\n")
+                                    except:
+                                        pass
+                                f.flush()
+                            except Exception as e:
+                                f.write(f"      Value: [Error - {e}]\n")
+                                f.flush()
+                        
+                        # List descriptors
+                        if char.descriptors:
+                            f.write(f"      Descriptors:\n")
+                            for desc in char.descriptors:
+                                f.write(f"        - {desc.uuid}\n")
+                            f.flush()
+                        
+                        f.write("\n")
+                        f.flush()
             
-            print()
+            except Exception as e:
+                f.write(f"✗ Error exploring GATT: {e}\n")
+                import traceback
+                f.write(traceback.format_exc())
+                f.flush()
+        
+        except Exception as e:
+            f.write(f"✗ Fatal error: {e}\n")
+            import traceback
+            f.write(traceback.format_exc())
+            f.flush()
+        
+        finally:
+            try:
+                if client.is_connected:
+                    await client.disconnect()
+                    f.write("\n✓ Disconnected\n")
+                    f.flush()
+            except:
+                pass
     
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
-    
-    finally:
-        # Disconnect
-        if client.is_connected:
-            await client.disconnect()
+    # Print the output file
+    print(f"Results written to {output_file}\n")
+    with open(output_file, "r") as f:
+        content = f.read()
+        print(content)
 
 
 def main():
-    """Main entry point."""
     if len(sys.argv) < 2:
         print("Usage: python3 02_device_connector.py <MAC_ADDRESS>")
         print("Example: python3 02_device_connector.py 00:22:a3:00:c7:57")
         sys.exit(1)
     
     mac_address = sys.argv[1]
-    
-    if not _is_valid_mac(mac_address):
-        print(f"Invalid MAC address: {mac_address}", file=sys.stderr)
-        sys.exit(1)
-    
-    try:
-        asyncio.run(explore_device(mac_address))
-    except KeyboardInterrupt:
-        print("\n\nConnection interrupted by user.")
-        sys.exit(0)
-
-
-def _is_valid_mac(mac):
-    """Check if MAC address is valid."""
-    parts = mac.split(':')
-    if len(parts) != 6:
-        return False
-    for part in parts:
-        if len(part) != 2:
-            return False
-        try:
-            int(part, 16)
-        except ValueError:
-            return False
-    return True
+    asyncio.run(connect_and_explore(mac_address))
 
 
 if __name__ == "__main__":
