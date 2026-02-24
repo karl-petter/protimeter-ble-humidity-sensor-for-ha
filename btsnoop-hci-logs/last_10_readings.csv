@@ -1,0 +1,21 @@
+SensorId,SensorName,Row,Date,Time,%RH,Temp,WME
+Protimeter_a300c757,KällarväggSyd ,260,10/29/2015,2:58:13 PM,47.9,16.9,0
+Protimeter_a300c757,KällarväggSyd ,261,2/16/2026,9:00:49 AM,25.5,18.3,0
+Protimeter_a300c757,KällarväggSyd ,262,2/17/2026,9:00:59 AM,22.9,18.1,0
+Protimeter_a300c757,KällarväggSyd ,263,2/18/2026,9:01:08 AM,22.9,18.3,0
+Protimeter_a300c757,KällarväggSyd ,264,2/19/2026,9:01:18 AM,24,18.1,0
+Protimeter_a300c757,KällarväggSyd ,265,2/20/2026,9:01:27 AM,25.4,18.3,0
+Protimeter_a300c757,KällarväggSyd ,266,2/21/2026,9:01:37 AM,25.7,18.8,0
+Protimeter_a300c757,KällarväggSyd ,267,2/22/2026,9:01:46 AM,27.8,19,0
+Protimeter_a300c757,KällarväggSyd ,268,2/23/2026,9:01:56 AM,27.2,17.7,0
+Protimeter_a300c757,KällarväggSyd ,269,2/24/2026,9:02:06 AM,27.3,18.2,0
+Protimeter_a300c30e,KällarväggNord,511,2/15/2026,9:47:53 AM,92.5,7.8,23.4
+Protimeter_a300c30e,KällarväggNord,512,2/16/2026,9:00:07 AM,92.2,7.8,23.2
+Protimeter_a300c30e,KällarväggNord,513,2/17/2026,9:00:16 AM,92,7.9,23.2
+Protimeter_a300c30e,KällarväggNord,514,2/18/2026,9:00:25 AM,91.8,7.9,23.6
+Protimeter_a300c30e,KällarväggNord,515,2/19/2026,9:00:34 AM,91.7,7.8,23.3
+Protimeter_a300c30e,KällarväggNord,516,2/20/2026,9:00:44 AM,91.5,7.9,23.4
+Protimeter_a300c30e,KällarväggNord,517,2/21/2026,9:00:53 AM,91.4,7.9,22.9
+Protimeter_a300c30e,KällarväggNord,518,2/22/2026,9:01:02 AM,91.2,7.9,23.1
+Protimeter_a300c30e,KällarväggNord,519,2/23/2026,9:01:11 AM,91.1,8,23.4
+Protimeter_a300c30e,KällarväggNord,520,2/24/2026,9:01:21 AM,91,8,23.1
