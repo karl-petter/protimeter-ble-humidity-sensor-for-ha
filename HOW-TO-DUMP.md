@@ -15,6 +15,14 @@
 # tshark
 tshark -r btsnoop-hci-logs/btsnoop_hci-2.log -Y 'btatt && (btatt.opcode==18 || btatt.opcode==82 || btatt.opcode==27 || btatt.opcode==29 || btatt.opcode==10)'   -T fields -e frame.time -e btatt.opcode -e btatt.handle -e btatt.value -E header=no -E separator=, > btsnoop_hci-2.log_output.txt
 
+tshark -r btsnoop-hci-logs/crash+export_all_values_btsnoop_hci.log  -Y 'btatt && (btatt.opcode==18 || btatt.opcode==82 || btatt.opcode==27 || btatt.opcode==29 || btatt.opcode==10)'   -T fields -e frame.time -e btatt.opcode -e btatt.handle -e btatt.value -E header=no -E separator=, > crash+export_all_values_btsnoop_hci.log_output.txt
+
+tshark -r btsnoop-hci-logs/current_value_btsnoop_hci.log -Y 'btatt && (btatt.opcode==18 || btatt.opcode==82 || btatt.opcode==27 || btatt.opcode==29 || btatt.opcode==10)'   -T fields -e frame.time -e btatt.opcode -e btatt.handle -e btatt.value -E header=no -E separator=, > current_value_btsnoop_hci.txt
+
+tshark -r btsnoop-hci-logs/last_10_readings_btsnoop_hci.log -Y 'btatt && (btatt.opcode==18 || btatt.opcode==82 || btatt.opcode==27 || btatt.opcode==29 || btatt.opcode==10)'   -T fields -e frame.time -e btatt.opcode -e btatt.handle -e btatt.value -E header=no -E separator=, > last_10_readings_btsnoop_hci.txt
+
+tshark -r btsnoop-hci-logs/save_settings_btsnoop_hci.log -Y 'btatt && (btatt.opcode==18 || btatt.opcode==82 || btatt.opcode==27 || btatt.opcode==29 || btatt.opcode==10)'   -T fields -e frame.time -e btatt.opcode -e btatt.handle -e btatt.value -E header=no -E separator=, > save_settings_btsnoop_hci.txt
+
 # Raspberry Pi
 The bluetooth device was disabled on my Raspberry Pi 3, needed to run the following commands
 sudo rfkill unblock all
