@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "bluetooth_confirm": {
+        "title": "Protimeter BLE — {name}",
+        "description": "Set up the Protimeter sensor at {address}.",
+        "data": {
+          "name": "Device name",
+          "fetch_interval_days": "History fetch interval"
+        }
+      },
+      "pick_device": {
+        "title": "Choose a Protimeter sensor",
+        "data": {
+          "address": "Device",
+          "fetch_interval_days": "History fetch interval"
+        }
+      },
+      "manual": {
+        "title": "Add Protimeter BLE sensor manually",
+        "description": "Enter the Bluetooth MAC address of your Protimeter sensor (e.g. 00:22:A3:00:C7:57).",
+        "data": {
+          "address": "MAC address",
+          "name": "Device name",
+          "fetch_interval_days": "History fetch interval"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This device is already configured.",
+      "already_in_progress": "Configuration is already in progress for this device."
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Make sure it is nearby and not connected to another app."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Protimeter BLE options",
+        "data": {
+          "fetch_interval_days": "History fetch interval"
+        }
+      }
+    }
+  }
+}
