@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from bleak import BleakClient, BleakError
+from bleak_retry_connector import establish_connection
 
 from homeassistant.components.bluetooth import async_ble_device_from_address
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
@@ -17,7 +18,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 import homeassistant.util.dt as dt_util
 
 from .const import (
-    BLE_CONNECT_TIMEOUT_S,
     BLE_RESPONSE_TIMEOUT_S,
     CMD_READ_COUNT,
     COMMAND_CHAR_UUID,
@@ -80,49 +80,60 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
 
     async def _fetch_history(self) -> ProtimeterRecord | None:
         """Connect to the device and import any new history records."""
-        device = (
-            async_ble_device_from_address(self.hass, self.address, connectable=True)
-            or self.address
+        device = async_ble_device_from_address(
+            self.hass, self.address, connectable=True
         )
+        if device is None:
+            raise UpdateFailed(
+                f"Protimeter {self.address}: device not found by HA Bluetooth scanner "
+                "(not in range, or no connectable advertisement seen recently)"
+            )
+
+        _LOGGER.debug("Protimeter %s: connecting (rssi=%s)", self.address,
+                      getattr(device, "rssi", "?"))
 
         try:
-            async with BleakClient(device, timeout=BLE_CONNECT_TIMEOUT_S) as client:
-                count = await self._ble_read_count(client)
-                if count == 0:
-                    _LOGGER.debug("Protimeter %s: device reports 0 records", self.address)
-                    return self.data
+            client = await establish_connection(BleakClient, device, self.address)
+        except (asyncio.TimeoutError, BleakError) as exc:
+            raise UpdateFailed(
+                f"Protimeter {self.address}: failed to connect — {exc}"
+            ) from exc
 
-                last_id = self.last_record_id
-                if last_id is None:
-                    # First run: read the complete history
-                    start = 0
-                else:
-                    # Incremental: re-read last HISTORY_OVERLAP records to verify
-                    # no gap, then continue with new records
-                    start = max(0, last_id - HISTORY_OVERLAP + 1)
+        try:
+            count = await self._ble_read_count(client)
+            if count == 0:
+                _LOGGER.debug("Protimeter %s: device reports 0 records", self.address)
+                return self.data
 
-                end = count - 1
-                if start > end:
-                    _LOGGER.debug(
-                        "Protimeter %s: already up to date (count=%d, last_id=%d)",
-                        self.address, count, last_id,
-                    )
-                    return self.data
+            last_id = self.last_record_id
+            if last_id is None:
+                # First run: read the complete history
+                start = 0
+            else:
+                # Incremental: re-read last HISTORY_OVERLAP records to verify
+                # no gap, then continue with new records
+                start = max(0, last_id - HISTORY_OVERLAP + 1)
 
+            end = count - 1
+            if start > end:
                 _LOGGER.debug(
-                    "Protimeter %s: fetching records %d–%d (%d on device)",
-                    self.address, start, end, count,
+                    "Protimeter %s: already up to date (count=%d, last_id=%d)",
+                    self.address, count, last_id,
                 )
-                records = await self._ble_read_records(client, start, end)
+                return self.data
 
-        except asyncio.TimeoutError as exc:
+            _LOGGER.debug(
+                "Protimeter %s: fetching records %d–%d (%d on device)",
+                self.address, start, end, count,
+            )
+            records = await self._ble_read_records(client, start, end)
+
+        except (asyncio.TimeoutError, BleakError) as exc:
             raise UpdateFailed(
-                f"Protimeter {self.address}: BLE connection timed out"
+                f"Protimeter {self.address}: BLE error during read — {exc}"
             ) from exc
-        except BleakError as exc:
-            raise UpdateFailed(
-                f"Protimeter {self.address}: BLE error — {exc}"
-            ) from exc
+        finally:
+            await client.disconnect()
 
         if not records:
             return self.data

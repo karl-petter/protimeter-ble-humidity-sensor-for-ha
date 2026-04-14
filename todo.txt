@@ -52,43 +52,53 @@ PHASE 3: PYTHON LIBRARY / INTEGRATION
           - parse_current_reading, parse_history_record
           - build_history_request
 [x] 3.3 - Implement BLE coordinator (coordinator.py)
-          - DataUpdateCoordinator
-          - Connect → write S → wait for notification → parse
+          - History-based fetch (C command + R command)
+          - bleak-retry-connector for reliable connections
+          - Full history on first run; incremental (with overlap) on subsequent
+          - Imports records as HA long-term statistics
+          - Background task on startup (non-blocking)
 [x] 3.4 - Implement config flow (config_flow.py)
-          - Bluetooth auto-discovery step
+          - Bluetooth auto-discovery (fixed: correct advertised UUID
+            00005500-d102-11e1-9b23-00025b00a5a5 + local_name Protimeter_*)
           - Device picker step (discovered devices)
           - Manual MAC address entry fallback
+          - Options flow (change fetch interval after setup)
 [x] 3.5 - Implement sensor entities (sensor.py)
-          - Humidity (%RH)
-          - Temperature (°C)
-          - Battery (%)
-          - Wood Moisture Equivalent (%)
-[x] 3.6 - Create manifest.json with BT UUID matcher
-[x] 3.7 - Create strings/translations files
+          - Humidity (%RH), Temperature (°C), Battery (%), WME (%)
+          - Values from most recent historical record
+[x] 3.6 - Implement button entity (button.py)
+          - "Fetch history" button for on-demand reads
+[x] 3.7 - Create manifest.json with correct BT UUID matcher
+[x] 3.8 - Create strings/translations files
 
 
 PHASE 4: TESTING & VALIDATION
 ==============================
-[ ] 4.1 - Install integration on Home Assistant instance
-[ ] 4.2 - Confirm auto-discovery or manual add works
+[x] 4.1 - Install integration on Home Assistant instance
+[x] 4.2 - Confirm auto-discovery works (both devices discovered)
+          - Fixed: manifest.json had wrong advertised UUID (5b00a5a5-...)
+          - Correct UUID verified from btsnoop HCI logs
 [ ] 4.3 - Verify sensor values match official app readings
-[ ] 4.4 - Test polling interval (default 5 min)
-[ ] 4.5 - Test device reconnection after BLE disconnect
-[ ] 4.6 - Test with both sensors simultaneously
-[ ] 4.7 - Monitor for BLE connection errors / UpdateFailed events
-[ ] 4.8 - Verify write_gatt_char response=False works
-          (fallback: change to response=True in coordinator.py if needed)
-[ ] 4.9 - Verify correct notification characteristic
-          (using 00005501; fallback: swap to 00001014 in const.py if needed)
+[ ] 4.4 - Verify history is imported as HA long-term statistics
+[ ] 4.5 - Test incremental fetch (overlap verification)
+[ ] 4.6 - Test "Fetch history" button
+[ ] 4.7 - Test options flow (change fetch interval)
+[ ] 4.8 - Test with both sensors simultaneously
+[ ] 4.9 - Monitor for BLE connection errors / UpdateFailed events
+[-] 4.10 - Resolve BLE connectivity
+          - Shelly BT gateway only does passive scanning, cannot connect
+          - Need ESPHome BT proxy with active: true near the sensors
+          - Proxy to be placed in Hallen or Gillestugan (both see devices
+            at -73/-78 dBm via Shelly passive scan)
+          - ESP32 hardware available, will be set up when home
 
 
 PHASE 5: ENHANCEMENTS (post-testing)
 ======================================
 [ ] 5.1 - Implement O command parsing (calibration offset read)
           to improve WME accuracy
-[ ] 5.2 - Implement history import as HA service call
-[ ] 5.3 - Add options flow to change polling interval after setup
-[ ] 5.4 - Submit to HACS default repository
+[ ] 5.2 - Add options flow to change polling interval after setup [DONE in 3.4]
+[ ] 5.3 - Submit to HACS default repository
 
 
 PHASE 6: DOCUMENTATION
@@ -103,6 +113,10 @@ NOTES:
 ------
 - Devices: 2× Protimeter BLE Humidity Sensor (installed in cellar)
 - Target Platform: Home Assistant (custom_components)
-- BLE library: bleak (via HA bluetooth integration)
+- BLE library: bleak + bleak-retry-connector (via HA bluetooth integration)
 - Protocol source: ProtimeterApp.dll (Xamarin/.NET, decompiled with monodis)
 - Data format: fully reverse-engineered and verified against captured data
+- Design: history-based (device records on its own schedule; HA reads
+  history periodically — default weekly — to preserve battery life)
+- BT connectivity: requires ESPHome proxy with active: true near sensors
+  (Shelly BT gateway is passive-only and cannot establish connections)
