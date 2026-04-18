@@ -10,8 +10,10 @@ ADVERTISED_SERVICE_UUID = "00005500-d102-11e1-9b23-00025b00a5a5"
 # GATT service containing all Protimeter-specific characteristics
 COMMAND_SERVICE_UUID = "00005500-d102-11e1-9b23-00025b00a5a5"
 
-# Single characteristic used for both writing commands and receiving notifications
+# Characteristic used for both writing commands and receiving notifications.
+# UUID confirmed from APK (CharacteristicIds) and live GATT dump (handle 29, props write+notify).
 COMMAND_CHAR_UUID = "00005501-d102-11e1-9b23-00025b00a5a5"
+NOTIFY_CHAR_UUID  = COMMAND_CHAR_UUID   # same characteristic — kept as alias
 
 # Standard BLE Battery Level characteristic (read directly, no command needed)
 BATTERY_SERVICE_UUID = "0000180f-0000-1000-8000-00805f9b34fb"

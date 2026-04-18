@@ -82,6 +82,16 @@ Byte 3-4: end index,   big-endian uint16
 Byte 5:   checksum = byte[1] XOR byte[2] XOR byte[3] XOR byte[4]
 ```
 
+**Record indices are 1-based.** Record 1 is the oldest, record N (= count) is the newest.
+Requesting start=0 causes the device to send no data.
+
+Example — fetch all records when count=0x0143 (323):
+```
+52 01 43 01 43 00
+    ^^^^^  ^^^^^
+    start   end   checksum = 0x01^0x43^0x01^0x43 = 0x00 ✓
+```
+
 Example — fetch records 0x00FB through 0x0104:
 ```
 52 00 FB 01 04 FE
@@ -93,8 +103,16 @@ The device sends one **20-byte** notification per record.
 
 ### `C` — Record Count
 
-Write the single byte `0x43`. The device responds with a 2-byte big-endian uint16
-containing the number of stored records.
+Write the single byte `0x43`. The device responds with a **7-byte** notification:
+
+```
+Offset  Length  Field
+  0       4     Device MAC address bytes 3–6 (same as in history records)
+  4       2     Record count, big-endian uint16
+  6       1     XOR checksum of bytes 4–5
+```
+
+Example response `a3 00 c7 57 01 42 70`: MAC=a300c757, count=0x0142=322, checksum=0x01^0x42=0x43... (over MAC+count bytes).
 
 ### `O` — Read Calibration Offset
 
@@ -373,7 +391,7 @@ def get_wme_value(raw_int, temp_c, battery, calibration_offsets=None):
 
 ```
 1. Scan for devices advertising ADVERTISED_SERVICE_ID
-   5b00a5a5-0002-9b23-e111-02d100550000
+   00005500-d102-11e1-9b23-00025b00a5a5
 
 2. Connect to device
 
@@ -394,8 +412,9 @@ def get_wme_value(raw_int, temp_c, battery, calibration_offsets=None):
    Write S → receive 12-byte SensorReading response
 
 8. Fetch history:
-   Write C → receive 2-byte record count N
-   Write R [0x00] [0x00] [hi(N)] [lo(N)] [checksum] → receive N × 20-byte records
+   Write C → receive 7-byte response; extract count N from bytes [4:6]
+   Write R [0x00] [0x01] [hi(N)] [lo(N)] [checksum] → receive N × 20-byte records
+   (indices are 1-based: start=1, end=N)
 
 9. Disconnect
 ```

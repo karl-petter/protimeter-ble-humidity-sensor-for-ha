@@ -21,12 +21,14 @@ from .const import (
     BLE_RESPONSE_TIMEOUT_S,
     CMD_READ_COUNT,
     COMMAND_CHAR_UUID,
+    COMMAND_SERVICE_UUID,
     CONF_FETCH_INTERVAL_DAYS,
     CONF_LAST_RECORD_ID,
     DEFAULT_FETCH_INTERVAL_DAYS,
     DOMAIN,
     HISTORY_OVERLAP,
     HISTORY_RECORD_LEN,
+    NOTIFY_CHAR_UUID,
 )
 from .parser import ProtimeterRecord, build_history_request, parse_history_record
 
@@ -100,21 +102,29 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
             ) from exc
 
         try:
-            count = await self._ble_read_count(client)
+            # Dump all GATT characteristics (debug) and discover the right
+            # command characteristic for this device/proxy combination.
+            cmd_uuid = self._discover_command_char(client)
+            _LOGGER.debug(
+                "Protimeter %s: using command char %s", self.address, cmd_uuid
+            )
+
+            count = await self._ble_read_count(client, cmd_uuid)
             if count == 0:
                 _LOGGER.debug("Protimeter %s: device reports 0 records", self.address)
                 return self.data
 
             last_id = self.last_record_id
             if last_id is None:
-                # First run: read the complete history
-                start = 0
+                # First run: read the complete history.
+                # Device records are 1-indexed (record 1 = oldest, record count = newest).
+                start = 1
             else:
                 # Incremental: re-read last HISTORY_OVERLAP records to verify
                 # no gap, then continue with new records
-                start = max(0, last_id - HISTORY_OVERLAP + 1)
+                start = max(1, last_id - HISTORY_OVERLAP + 1)
 
-            end = count - 1
+            end = count  # last valid record index = count (1-indexed)
             if start > end:
                 _LOGGER.debug(
                     "Protimeter %s: already up to date (count=%d, last_id=%d)",
@@ -126,7 +136,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                 "Protimeter %s: fetching records %d–%d (%d on device)",
                 self.address, start, end, count,
             )
-            records = await self._ble_read_records(client, start, end)
+            records = await self._ble_read_records(client, start, end, cmd_uuid)
 
         except (asyncio.TimeoutError, BleakError) as exc:
             raise UpdateFailed(
@@ -153,7 +163,67 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         # Return the most-recent record as coordinator.data (shown on sensor entities)
         return max(records, key=lambda r: r.record_id)
 
-    async def _ble_read_count(self, client: BleakClient) -> int:
+    def _discover_command_char(self, client: BleakClient) -> str:
+        """
+        Find the best characteristic UUID for sending commands and receiving
+        responses. Logs all characteristics for debugging.
+
+        Priority:
+          1. A char in the Protimeter service (00005500) that has write+notify.
+          2. COMMAND_CHAR_UUID constant (00005501) if present anywhere.
+          3. NOTIFY_CHAR_UUID constant (00001014) as last resort.
+        """
+        candidates: list[tuple[int, str]] = []  # (priority, uuid)
+        for svc in client.services:
+            for ch in svc.characteristics:
+                _LOGGER.debug(
+                    "Protimeter %s: GATT char uuid=%s handle=%d props=%s",
+                    self.address, ch.uuid, ch.handle, ch.properties,
+                )
+                props = set(ch.properties)
+                has_write = bool(props & {"write", "write-without-response"})
+                has_notify = bool(props & {"notify", "indicate"})
+                in_proto_svc = svc.uuid.lower() == COMMAND_SERVICE_UUID.lower()
+
+                if in_proto_svc and has_write and has_notify:
+                    candidates.append((0, ch.uuid))
+                elif ch.uuid.lower() == COMMAND_CHAR_UUID.lower():
+                    candidates.append((1, ch.uuid))
+                elif ch.uuid.lower() == NOTIFY_CHAR_UUID.lower():
+                    candidates.append((2, ch.uuid))
+
+        if candidates:
+            candidates.sort()
+            return candidates[0][1]
+
+        # Nothing matched — fall back to the constant and let bleak fail loudly
+        _LOGGER.warning(
+            "Protimeter %s: no suitable command characteristic found in GATT; "
+            "falling back to %s", self.address, COMMAND_CHAR_UUID,
+        )
+        return COMMAND_CHAR_UUID
+
+    async def _start_notify_best_effort(
+        self, client: BleakClient, uuid: str, handler
+    ) -> bool:
+        """
+        Call start_notify and return True on success.
+        If the CCCD write is refused (bonding required), log a warning and
+        return False — the caller will still send the command in case the
+        device fires unsolicited notifications.
+        """
+        try:
+            await client.start_notify(uuid, handler)
+            return True
+        except BleakError as exc:
+            _LOGGER.warning(
+                "Protimeter %s: could not enable notifications on %s: %s — "
+                "will send command anyway (device may notify without CCCD)",
+                self.address, uuid, exc,
+            )
+            return False
+
+    async def _ble_read_count(self, client: BleakClient, cmd_uuid: str) -> int:
         """
         Send C command and return the total number of stored records.
         Response: 2-byte big-endian uint16.
@@ -162,24 +232,33 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         done = asyncio.Event()
 
         def _handler(_sender: int, data: bytearray) -> None:
-            if len(data) == 2 and not done.is_set():
-                result.append(data[0] * 256 + data[1])
+            _LOGGER.debug(
+                "Protimeter %s: C response %d bytes: %s",
+                self.address, len(data), data.hex(),
+            )
+            # Response format: MAC(4) + count_hi + count_lo + xor_checksum
+            # e.g. a300c757 0142 70  →  count = 0x0142 = 322
+            if len(data) == 7 and not done.is_set():
+                count = data[4] * 256 + data[5]
+                result.append(count)
                 done.set()
 
-        await client.start_notify(COMMAND_CHAR_UUID, _handler)
-        await client.write_gatt_char(COMMAND_CHAR_UUID, CMD_READ_COUNT, response=False)
+        subscribed = await self._start_notify_best_effort(client, cmd_uuid, _handler)
+        await client.write_gatt_char(cmd_uuid, CMD_READ_COUNT, response=True)
         try:
             await asyncio.wait_for(done.wait(), timeout=BLE_RESPONSE_TIMEOUT_S)
         except asyncio.TimeoutError as exc:
-            await client.stop_notify(COMMAND_CHAR_UUID)
+            if subscribed:
+                await client.stop_notify(cmd_uuid)
             raise UpdateFailed(
                 f"Protimeter {self.address}: timed out reading record count"
             ) from exc
-        await client.stop_notify(COMMAND_CHAR_UUID)
+        if subscribed:
+            await client.stop_notify(cmd_uuid)
         return result[0] if result else 0
 
     async def _ble_read_records(
-        self, client: BleakClient, start: int, end: int
+        self, client: BleakClient, start: int, end: int, cmd_uuid: str
     ) -> list[ProtimeterRecord]:
         """
         Send R command and collect all records from start..end (inclusive).
@@ -190,22 +269,32 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         done = asyncio.Event()
 
         def _handler(_sender: int, data: bytearray) -> None:
+            _LOGGER.debug(
+                "Protimeter %s: R notification %d bytes: %s",
+                self.address, len(data), data.hex(),
+            )
             if len(data) == HISTORY_RECORD_LEN and not done.is_set():
                 rec = parse_history_record(data)
                 if rec is not None:
                     received.append(rec)
                     if len(received) >= expected:
                         done.set()
+                else:
+                    _LOGGER.debug(
+                        "Protimeter %s: parse_history_record returned None for %s",
+                        self.address, data.hex(),
+                    )
 
         # Allow 0.3 s per record (BLE is fast; this is very conservative)
         timeout_s = min(300.0, 30.0 + expected * 0.3)
 
-        await client.start_notify(COMMAND_CHAR_UUID, _handler)
-        await client.write_gatt_char(
-            COMMAND_CHAR_UUID,
-            build_history_request(start, end),
-            response=False,
+        cmd_bytes = build_history_request(start, end)
+        _LOGGER.debug(
+            "Protimeter %s: sending R command %s (records %d–%d, timeout %.0fs)",
+            self.address, cmd_bytes.hex(), start, end, timeout_s,
         )
+        subscribed = await self._start_notify_best_effort(client, cmd_uuid, _handler)
+        await client.write_gatt_char(cmd_uuid, cmd_bytes, response=True)
         try:
             await asyncio.wait_for(done.wait(), timeout=timeout_s)
         except asyncio.TimeoutError:
@@ -214,7 +303,8 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                 "(%.0f s); proceeding with partial data",
                 self.address, len(received), expected, timeout_s,
             )
-        await client.stop_notify(COMMAND_CHAR_UUID)
+        if subscribed:
+            await client.stop_notify(cmd_uuid)
         return received
 
     # ── Statistics import ─────────────────────────────────────────────────────
@@ -310,6 +400,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                     statistic_id=statistic_id,
                     name=f"{device_name} {label}",
                     unit_of_measurement=unit,
+                    unit_class=None,
                     mean_type=StatisticMeanType.ARITHMETIC,
                     has_sum=False,
                 )
@@ -320,6 +411,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                         statistic_id=statistic_id,
                         name=f"{device_name} {label}",
                         unit_of_measurement=unit,
+                        unit_class=None,
                         has_mean=True,
                         has_sum=False,
                     )
