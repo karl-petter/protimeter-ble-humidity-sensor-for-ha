@@ -311,11 +311,15 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
 
     def _import_statistics(self, records: list[ProtimeterRecord]) -> None:
         """
-        Import records as HA long-term statistics.
+        Import records as HA long-term statistics (external, source=DOMAIN).
 
         Records are grouped into hourly buckets (mean/min/max per hour).
         Existing statistics for the same hour are overwritten, so the
         overlap re-reads are harmless.
+
+        Note: HA 2026.x does not allow custom integrations to use
+        source="homeassistant", so statistics cannot be entity-linked.
+        Use a statistics-graph card with the statistic IDs to visualise history.
 
         Device timestamps are interpreted as being in HA's configured timezone.
         """
@@ -334,8 +338,8 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
             )
             return
 
-        addr_slug = self.address.lower().replace(":", "")
         device_name = self._entry.data.get("name", self.address)
+        addr_slug = self.address.lower().replace(":", "")
 
         # (key, unit, human label)
         sensors: list[tuple[str, str, str]] = [
@@ -376,7 +380,6 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
             )
 
         for key, unit, label in sensors:
-            statistic_id = f"{DOMAIN}:{addr_slug}_{key}"
             stats = [
                 StatisticData(
                     start=hour_start,
@@ -389,6 +392,8 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
             ]
             if not stats:
                 continue
+
+            statistic_id = f"{DOMAIN}:{addr_slug}_{key}"
 
             # Build metadata — try both old (has_mean) and new (mean_type) API
             try:

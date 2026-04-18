@@ -1,6 +1,6 @@
 # Protimeter BLE — Home Assistant Integration
 
-A Home Assistant custom integration for the **Protimeter BLE humidity sensor**.
+A Home Assistant custom integration for the **[Protimeter BLE humidity sensor](https://www.protimeter.com/ble)**.
 Exposes humidity, temperature, Wood Moisture Equivalent (WME), and battery level
 as HA sensor entities, enabling automations, dashboards, and long-term graphs.
 
