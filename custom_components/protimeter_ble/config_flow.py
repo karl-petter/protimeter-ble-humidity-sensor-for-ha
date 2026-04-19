@@ -134,7 +134,7 @@ class ProtimeterConfigFlow(ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
             return self._create_entry(
                 address=address,
-                name=self._discovered_devices[address],
+                name=user_input.get(CONF_NAME) or self._discovered_devices[address],
                 fetch_interval_days=user_input.get(
                     CONF_FETCH_INTERVAL_DAYS, DEFAULT_FETCH_INTERVAL_DAYS
                 ),
@@ -145,6 +145,7 @@ class ProtimeterConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_ADDRESS): vol.In(self._discovered_devices),
+                    vol.Optional(CONF_NAME): str,
                     vol.Required(
                         CONF_FETCH_INTERVAL_DAYS,
                         default=DEFAULT_FETCH_INTERVAL_DAYS,

@@ -79,15 +79,16 @@ PHASE 4: TESTING & VALIDATION
           - Fixed: manifest.json had wrong advertised UUID (5b00a5a5-...)
           - Correct UUID verified from btsnoop HCI logs
 [ ] 4.3 - Verify sensor values match official app readings
-[-] 4.4 - Verify history is imported as HA long-term statistics
+[x] 4.4 - Verify history is imported as HA long-term statistics
           - 315/323 hourly buckets confirmed written to recorder
-          - Awaiting HA restart to confirm display in statistics viewer
+          - Displaying correctly in statistics-graph card with period: day
 [x] 4.5 - Test incremental fetch (overlap verification)
           - HISTORY_OVERLAP=5 confirmed working; start=max(1, last_id-4)
 [x] 4.6 - Test "Fetch history" button
           - Confirmed: button triggers async_refresh → full/incremental fetch
-[ ] 4.7 - Test options flow (change fetch interval)
-[ ] 4.8 - Test with both sensors simultaneously
+[x] 4.7 - Test options flow (change fetch interval)
+          - Confirmed: options dialog saves and persists new value correctly
+[x] 4.8 - Test with both sensors simultaneously
 [ ] 4.9 - Monitor for BLE connection errors / UpdateFailed events
 [x] 4.10 - Resolve BLE connectivity
           - Shelly BT gateway only does passive scanning, cannot connect

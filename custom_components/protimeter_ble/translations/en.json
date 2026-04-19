@@ -13,6 +13,7 @@
         "title": "Choose a Protimeter sensor",
         "data": {
           "address": "Device",
+          "name": "Friendly name (optional)",
           "fetch_interval_days": "History fetch interval"
         }
       },
