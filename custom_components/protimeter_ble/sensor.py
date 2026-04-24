@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Callable
 
 from homeassistant.components.sensor import (
@@ -21,6 +22,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+import homeassistant.util.dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import ProtimeterCoordinator
@@ -80,10 +82,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up sensor entities from a config entry."""
     coordinator: ProtimeterCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
+    entities: list[SensorEntity] = [
         ProtimeterSensor(coordinator, entry, desc)
         for desc in SENSOR_DESCRIPTIONS
-    )
+    ]
+    entities.append(ProtimeterTimestampSensor(coordinator, entry))
+    async_add_entities(entities)
 
 
 class ProtimeterSensor(
@@ -120,3 +124,41 @@ class ProtimeterSensor(
         if self.coordinator.data is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
+
+
+class ProtimeterTimestampSensor(
+    CoordinatorEntity[ProtimeterCoordinator], SensorEntity
+):
+    """Sensor showing when the most-recent record was recorded on the device."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_name = "Last reading"
+
+    def __init__(
+        self,
+        coordinator: ProtimeterCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.address}_last_reading"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.address)},
+            name=entry.data.get(CONF_NAME, coordinator.address),
+            manufacturer="Protimeter",
+            model="BLE Humidity Sensor",
+        )
+
+    @property
+    def native_value(self) -> datetime | None:
+        rec = self.coordinator.data
+        if rec is None:
+            return None
+        try:
+            naive_local = datetime(
+                rec.year, rec.month, rec.day,
+                rec.hour, rec.minute, rec.second,
+            )
+            return naive_local.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        except (ValueError, OverflowError):
+            return None

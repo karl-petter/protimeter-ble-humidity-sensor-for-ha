@@ -8,7 +8,6 @@ See PROTOCOL.md for the full specification.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from .const import CURRENT_READING_LEN, HISTORY_RECORD_LEN
@@ -17,6 +16,7 @@ from .const import CURRENT_READING_LEN, HISTORY_RECORD_LEN
 # ── Lookup tables (from ByteHelper static constructor) ─────────────────────────
 
 # AdcTable: maps (adc_value) → raw_wme via piecewise linear interpolation
+# Source: ByteHelper static constructor, confirmed from ProtimeterApp.il .cctor
 # Columns: (XStart, XEnd, YStart, YEnd)
 _ADC_TABLE: list[tuple[float, float, float, float]] = [
     (0,    32,   450,   516),
@@ -54,6 +54,48 @@ _ADC_TABLE: list[tuple[float, float, float, float]] = [
     (1024, 9999, 14000, 99999),
 ]
 
+# NominalCalibrationConstants: reference WME values for calibration slots 1–4.
+# Source: ByteHelper.NominalCalibrationConstants, RVA 0x00197c30 in ProtimeterApp.dll.
+# GetCalibratedWme maps each O-command slot's t_comp (X) → this reference value (Y).
+_NOMINAL_CAL = [1320, 1820, 2690, 4000]
+
+# BatteryLevelTable: maps battery % → H2o values (device-measured WME when true
+# moisture is at calibration reference points 9, 13.2, 18.2, 26.9, 40 %).
+# Source: ByteHelper static constructor (BatteryLevelTable field initialiser).
+# At battery=86 the H2o values equal the reference values (identity / no correction).
+# Below 86: device underestimates (H2o < reference) → correction boosts WME.
+# Above 86: device overestimates (H2o > reference) → correction reduces WME.
+# Sorted descending by battery — same order as in the IL .cctor.
+# Tuple layout: (battery, h2o9, h2o13, h2o18, h2o26, h2o40)
+_BATTERY_TABLE: list[tuple[int, float, float, float, float, float]] = [
+    (110, 12.0,  15.0,  22.0,  32.0,  47.0),
+    (100, 10.99, 13.75, 19.19, 30.08, 45.07),
+    ( 96, 10.83, 13.6,  18.93, 29.17, 43.52),
+    ( 93, 10.68, 13.46, 18.66, 28.26, 41.98),
+    ( 89, 10.6,  13.33, 18.43, 27.59, 40.99),
+    ( 86, 10.53, 13.2,  18.2,  26.91, 40.0),
+    ( 82, 10.36, 13.09, 17.97, 26.58, 39.1),
+    ( 79, 10.2,  12.97, 17.74, 26.26, 38.2),
+    ( 75, 10.16, 12.79, 17.46, 25.87, 36.99),
+    ( 71, 10.13, 12.6,  17.19, 25.49, 35.78),
+    ( 68, 10.04, 12.49, 16.98, 25.18, 34.84),
+    ( 64,  9.95, 12.38, 16.78, 24.87, 33.91),
+    ( 61,  9.86, 12.24, 16.57, 24.55, 32.92),
+    ( 57,  9.76, 12.1,  16.35, 24.24, 31.93),
+    ( 54,  9.61, 11.96, 16.13, 23.9,  31.0),
+    ( 50,  9.45, 11.82, 15.9,  23.57, 30.08),
+    ( 46,  9.36, 11.68, 15.67, 23.26, 29.1),
+    ( 43,  9.27, 11.54, 15.43, 22.95, 28.12),
+    ( 39,  9.13, 11.43, 15.24, 22.65, 27.43),
+    ( 36,  8.99, 11.31, 15.05, 22.35, 26.74),
+    ( 32,  8.95, 11.15, 14.79, 21.98, 26.28),
+    ( 29,  8.91, 10.99, 14.54, 21.62, 25.82),
+    ( 25,  8.83, 10.89, 14.34, 21.31, 25.48),
+    ( 21,  8.75, 10.78, 14.13, 21.01, 25.13),
+    ( 18,  8.69, 10.61, 13.94, 20.66, 24.77),
+    ( 14,  8.63, 10.44, 13.74, 20.31, 24.4),
+]
+
 
 # ── Primitive helpers ──────────────────────────────────────────────────────────
 
@@ -84,13 +126,13 @@ def _decode_temperature(high: int, low: int) -> float:
 
 # ── WME pipeline ───────────────────────────────────────────────────────────────
 
-def _wme_to_adc(raw_int: int) -> float:
-    """Scale raw WME integer to internal ADC units."""
+def _wme_to_adc(raw_int: float) -> float:
+    """Scale raw WME integer to internal ADC units. Source: ByteHelper.GetWmeAdcValue"""
     return round(raw_int / 1000.0 * 758.51851851851848)
 
 
 def _adc_to_raw_wme(adc: float) -> float:
-    """Piecewise linear interpolation through AdcTable."""
+    """Piecewise linear interpolation through AdcTable. Source: ByteHelper.GetRawWmeFromAdc"""
     for xstart, xend, ystart, yend in _ADC_TABLE:
         if xstart <= adc < xend:
             slope = (yend - ystart) / (xend - xstart)
@@ -104,11 +146,11 @@ def _temperature_compensate_wme(raw_wme: float, temp_c: float) -> float:
     Source: ByteHelper.GetTemperatureCompensatedWmeValue
     Nominal operating temperature: 22 °C (2200 in 100ths of °C).
     """
-    NOMINAL_TEMP    = 2200    # 22.00 °C × 100
-    LOW_THRESHOLD   = 1300
-    HIGH_THRESHOLD  = 2500
-    LOW_FACTOR      = -3
-    HIGH_FACTOR     = -6
+    NOMINAL_TEMP   = 2200
+    LOW_THRESHOLD  = 1300
+    HIGH_THRESHOLD = 2500
+    LOW_FACTOR     = -3
+    HIGH_FACTOR    = -6
 
     v = float(raw_wme)
     if v > HIGH_THRESHOLD:
@@ -122,31 +164,132 @@ def _temperature_compensate_wme(raw_wme: float, temp_c: float) -> float:
     return round(raw_wme + v)
 
 
-def _decode_wme(raw_int: int, temp_c: float) -> float:
+def _calibrate_wme(t_comp: float, cal_offsets: list[CalibrationOffset]) -> float:
     """
-    Wood Moisture Equivalent (%) — approximate, without device calibration.
+    Map temperature-compensated WME to calibrated WME using device-specific
+    O-command calibration data.
 
-    Full accuracy requires calibration offsets fetched via the 'O' command
-    and battery voltage compensation via BatteryLevelTable.  Those are
-    omitted here since they require a connected device at setup time.
+    Source: ByteHelper.GetCalibratedWme
 
-    Returns 0.0 if the value is below the 6 % noise floor.
-    Clamped to [0, 100].
+    Each O-command slot provides a device measurement (raw_int + temperature).
+    We run that through the same ADC→raw_wme→t_comp pipeline to get the X
+    coordinate, and pair it with NominalCalibrationConstants[slot_index] as Y.
+    Then linearly interpolate to find the calibrated value for the current t_comp.
+
+    Falls back to t_comp / 100.0 if fewer than 2 calibration points are available
+    (mirrors the app's exception-handler fallback).
+    """
+    # Build (X, Y) entries sorted by slot order (as the app iterates them)
+    entries: list[tuple[float, float]] = []
+    for idx, offset in enumerate(sorted(cal_offsets, key=lambda o: o.slot)):
+        if idx >= len(_NOMINAL_CAL):
+            break
+        adc     = _wme_to_adc(offset.raw_int)
+        raw_wme = _adc_to_raw_wme(adc)
+        x       = float(_temperature_compensate_wme(raw_wme, offset.temperature))
+        y       = float(_NOMINAL_CAL[idx])
+        entries.append((x, y))
+
+    if len(entries) < 2:
+        return t_comp / 100.0  # fallback: same as app's exception-handler (t_comp / 100)
+
+    # Find the two surrounding entries (extrapolates at both ends)
+    if t_comp < entries[0][0]:
+        lower, upper = entries[0], entries[1]
+    elif t_comp >= entries[-1][0]:
+        lower, upper = entries[-2], entries[-1]
+    else:
+        lower, upper = entries[0], entries[1]
+        for i in range(len(entries) - 1):
+            if entries[i][0] <= t_comp < entries[i + 1][0]:
+                lower, upper = entries[i], entries[i + 1]
+                break
+
+    slope = (upper[1] - lower[1]) / (upper[0] - lower[0])
+    # Divide by 100 here — mirrors GetCalibratedWme's internal ldc.r8 100.0 / div
+    return (slope * (t_comp - lower[0]) + lower[1]) / 100.0
+
+
+def _voltage_compensate_wme(battery: int, calibrated: float) -> float:
+    """
+    Battery-voltage compensation.
+    Source: ByteHelper.GetVoltageCompensatedWme
+
+    Finds the floor entry in BatteryLevelTable (highest Battery ≤ actual battery),
+    then linearly interpolates between the two surrounding H2o calibration points to
+    map the device reading to the true-moisture reference scale.
+
+    Reference moisture points: 9.0, 13.2, 18.2, 26.9, 40.0 %
+    """
+    # Floor lookup: iterate descending table, take first entry with Battery ≤ battery
+    entry = _BATTERY_TABLE[-1]  # fallback = lowest entry (battery=14)
+    for e in _BATTERY_TABLE:
+        if e[0] <= battery:
+            entry = e
+            break
+
+    _, h2o9, h2o13, h2o18, h2o26, h2o40 = entry
+
+    # Select surrounding H2o bracket and interpolate
+    if calibrated <= h2o13:
+        lo_dev, lo_ref, hi_dev, hi_ref = h2o9,  9.0,  h2o13, 13.2
+    elif calibrated <= h2o18:
+        lo_dev, lo_ref, hi_dev, hi_ref = h2o13, 13.2, h2o18, 18.2
+    elif calibrated <= h2o26:
+        lo_dev, lo_ref, hi_dev, hi_ref = h2o18, 18.2, h2o26, 26.9
+    else:
+        lo_dev, lo_ref, hi_dev, hi_ref = h2o26, 26.9, h2o40, 40.0
+
+    return ((hi_ref - lo_ref) / (hi_dev - lo_dev)) * (calibrated - lo_dev) + lo_ref
+
+
+def _decode_wme(
+    raw_int: int,
+    temp_c: float,
+    battery: int,
+    cal_offsets: list[CalibrationOffset] | None = None,
+) -> float:
+    """
+    Wood Moisture Equivalent (%).
+
+    Pipeline: raw_int → ADC → raw_wme (AdcTable) →
+              t_comp (GetTemperatureCompensatedWmeValue) →
+              calibrated % (GetCalibratedWme, includes ÷100) →
+              voltage-compensated % (GetVoltageCompensatedWme) →
+              clamp to [0, 100].
+
+    Source: ByteHelper.GetWmeValue
     """
     if raw_int == 0:
         return 0.0
-    adc     = _wme_to_adc(raw_int)
-    raw     = _adc_to_raw_wme(adc)
-    t_comp  = _temperature_compensate_wme(raw, temp_c)
-    # Nominal calibration fallback (no device-specific offsets)
-    cal     = t_comp / 100.0
-    # Clamp
-    if cal < 6.0:
+    adc    = _wme_to_adc(raw_int)
+    raw    = _adc_to_raw_wme(adc)
+    t_comp = _temperature_compensate_wme(raw, temp_c)
+
+    if cal_offsets:
+        cal = _calibrate_wme(t_comp, cal_offsets)   # already ÷100
+    else:
+        cal = t_comp / 100.0
+
+    volt_comp = _voltage_compensate_wme(battery, cal)
+
+    if volt_comp < 6.0:
         return 0.0
-    return min(cal, 100.0)
+    return min(volt_comp, 100.0)
 
 
 # ── Public data types ──────────────────────────────────────────────────────────
+
+@dataclass
+class CalibrationOffset:
+    """
+    One calibration slot from the O command response.
+    Source: ByteHelper.GetCalibrationOffsetFromBytes
+    """
+    slot:        int    # calibration point index (1–4)
+    raw_int:     int    # device's WME measurement at calibration (big-endian uint16)
+    temperature: float  # temperature at calibration (°C)
+
 
 @dataclass
 class ProtimeterReading:
@@ -175,7 +318,31 @@ class ProtimeterRecord:
 
 # ── Public parsers ─────────────────────────────────────────────────────────────
 
-def parse_current_reading(data: bytes | bytearray) -> ProtimeterReading | None:
+def parse_calibration_offset(data: bytes | bytearray) -> CalibrationOffset | None:
+    """
+    Parse one 19-byte O-command notification.
+
+    Byte layout (from ByteHelper.GetCalibrationOffsetFromBytes):
+      [0:4]   MAC tail
+      [4]     calibration slot (1–4)
+      [5:13]  timestamp (not used)
+      [13:15] temperature (same encoding as history records)
+      [15:17] raw WME integer at calibration (big-endian uint16)
+      [17:19] reference WME (not needed for calibration)
+    """
+    if not data or len(data) < 17:
+        return None
+    return CalibrationOffset(
+        slot        = data[4],
+        raw_int     = _u16(data[15], data[16]),
+        temperature = _decode_temperature(data[13], data[14]),
+    )
+
+
+def parse_current_reading(
+    data: bytes | bytearray,
+    cal_offsets: list[CalibrationOffset] | None = None,
+) -> ProtimeterReading | None:
     """
     Parse the 12-byte response to command 'S'.
 
@@ -191,15 +358,19 @@ def parse_current_reading(data: bytes | bytearray) -> ProtimeterReading | None:
         return None
 
     temp = _decode_temperature(data[6], data[7])
+    battery = data[10]
     return ProtimeterReading(
         humidity    = round(_decode_humidity(data[4], data[5]), 1),
         temperature = round(temp, 1),
-        wme         = round(_decode_wme(_u16(data[8], data[9]), temp), 1),
-        battery     = data[10],
+        wme         = round(_decode_wme(_u16(data[8], data[9]), temp, battery, cal_offsets), 1),
+        battery     = battery,
     )
 
 
-def parse_history_record(data: bytes | bytearray) -> ProtimeterRecord | None:
+def parse_history_record(
+    data: bytes | bytearray,
+    cal_offsets: list[CalibrationOffset] | None = None,
+) -> ProtimeterRecord | None:
     """
     Parse a 20-byte history record from command 'R'.
 
@@ -221,12 +392,12 @@ def parse_history_record(data: bytes | bytearray) -> ProtimeterRecord | None:
     if not data or len(data) < HISTORY_RECORD_LEN:
         return None
 
-    # Reconstruct 4-digit year from 2-digit device value + current century
     from datetime import datetime
     century = (datetime.utcnow().year // 100) * 100
     year = century + data[6]
 
     temp = _decode_temperature(data[14], data[15])
+    battery = data[18]
     return ProtimeterRecord(
         record_id   = _u16(data[4], data[5]),
         year        = year,
@@ -237,8 +408,8 @@ def parse_history_record(data: bytes | bytearray) -> ProtimeterRecord | None:
         second      = data[11],
         humidity    = round(_decode_humidity(data[12], data[13]), 1),
         temperature = round(temp, 1),
-        wme         = round(_decode_wme(_u16(data[16], data[17]), temp), 1),
-        battery     = data[18],
+        wme         = round(_decode_wme(_u16(data[16], data[17]), temp, battery, cal_offsets), 1),
+        battery     = battery,
     )
 
 

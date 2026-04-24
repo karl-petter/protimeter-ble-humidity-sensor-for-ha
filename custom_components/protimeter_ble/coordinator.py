@@ -19,6 +19,7 @@ import homeassistant.util.dt as dt_util
 
 from .const import (
     BLE_RESPONSE_TIMEOUT_S,
+    CMD_READ_CALIB,
     CMD_READ_COUNT,
     COMMAND_CHAR_UUID,
     COMMAND_SERVICE_UUID,
@@ -30,7 +31,13 @@ from .const import (
     HISTORY_RECORD_LEN,
     NOTIFY_CHAR_UUID,
 )
-from .parser import ProtimeterRecord, build_history_request, parse_history_record
+from .parser import (
+    CalibrationOffset,
+    ProtimeterRecord,
+    build_history_request,
+    parse_calibration_offset,
+    parse_history_record,
+)
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -114,6 +121,11 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                 _LOGGER.debug("Protimeter %s: device reports 0 records", self.address)
                 return self.data
 
+            cal_offsets = await self._ble_read_calibration(client, cmd_uuid)
+            _LOGGER.debug(
+                "Protimeter %s: got %d calibration slot(s)", self.address, len(cal_offsets)
+            )
+
             last_id = self.last_record_id
             if last_id is None:
                 # First run: read the complete history.
@@ -136,7 +148,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                 "Protimeter %s: fetching records %d–%d (%d on device)",
                 self.address, start, end, count,
             )
-            records = await self._ble_read_records(client, start, end, cmd_uuid)
+            records = await self._ble_read_records(client, start, end, cmd_uuid, cal_offsets)
 
         except (asyncio.TimeoutError, BleakError) as exc:
             raise UpdateFailed(
@@ -257,8 +269,48 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
             await client.stop_notify(cmd_uuid)
         return result[0] if result else 0
 
+    async def _ble_read_calibration(
+        self, client: BleakClient, cmd_uuid: str
+    ) -> list[CalibrationOffset]:
+        """
+        Send O command and collect per-slot calibration offsets.
+        The device returns one 19-byte notification per calibration slot (up to 4).
+        Used by GetCalibratedWme to map device-specific t_comp values to
+        NominalCalibrationConstants reference points [1320, 1820, 2690, 4000].
+        """
+        received: list[CalibrationOffset] = []
+        done = asyncio.Event()
+
+        def _handler(_sender: int, data: bytearray) -> None:
+            if len(data) == 19:
+                offset = parse_calibration_offset(data)
+                if offset is not None:
+                    _LOGGER.debug(
+                        "Protimeter %s: calibration slot %d raw_int=%d temp=%.1f",
+                        self.address, offset.slot, offset.raw_int, offset.temperature,
+                    )
+                    received.append(offset)
+                    if len(received) >= 4:
+                        done.set()
+
+        subscribed = await self._start_notify_best_effort(client, cmd_uuid, _handler)
+        await client.write_gatt_char(cmd_uuid, CMD_READ_CALIB, response=True)
+        try:
+            await asyncio.wait_for(done.wait(), timeout=BLE_RESPONSE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            # Fewer than 4 slots is acceptable — use what we got
+            if not received:
+                _LOGGER.warning(
+                    "Protimeter %s: no calibration data received; WME will be uncalibrated",
+                    self.address,
+                )
+        if subscribed:
+            await client.stop_notify(cmd_uuid)
+        return received
+
     async def _ble_read_records(
-        self, client: BleakClient, start: int, end: int, cmd_uuid: str
+        self, client: BleakClient, start: int, end: int, cmd_uuid: str,
+        cal_offsets: list[CalibrationOffset] | None = None,
     ) -> list[ProtimeterRecord]:
         """
         Send R command and collect all records from start..end (inclusive).
@@ -274,7 +326,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                 self.address, len(data), data.hex(),
             )
             if len(data) == HISTORY_RECORD_LEN and not done.is_set():
-                rec = parse_history_record(data)
+                rec = parse_history_record(data, cal_offsets)
                 if rec is not None:
                     received.append(rec)
                     if len(received) >= expected:
