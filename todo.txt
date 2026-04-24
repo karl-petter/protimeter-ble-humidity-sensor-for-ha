@@ -78,7 +78,10 @@ PHASE 4: TESTING & VALIDATION
 [x] 4.2 - Confirm auto-discovery works (both devices discovered)
           - Fixed: manifest.json had wrong advertised UUID (5b00a5a5-...)
           - Correct UUID verified from btsnoop HCI logs
-[ ] 4.3 - Verify sensor values match official app readings
+[x] 4.3 - Verify sensor values match official app readings
+          - RH 74.8%, Temp 9.3°C match exactly
+          - WME 12.2% (app) = 12.2% (HA after revert to t_comp/100)
+          - CalibrationOffsetTable was a red herring; correct fallback is t_comp/100
 [x] 4.4 - Verify history is imported as HA long-term statistics
           - 315/323 hourly buckets confirmed written to recorder
           - Displaying correctly in statistics-graph card with period: day
@@ -90,6 +93,9 @@ PHASE 4: TESTING & VALIDATION
           - Confirmed: options dialog saves and persists new value correctly
 [x] 4.8 - Test with both sensors simultaneously
 [ ] 4.9 - Monitor for BLE connection errors / UpdateFailed events
+[x] 4.10.1 - Add parser unit tests (tests/test_parser.py) using real BLE bytes
+             from debug log; 33 tests, all passing; cross-referenced against app
+[ ] 4.11 - Troubleshoot nordvägg BLE connectivity (intermittent timeouts)
 [x] 4.10 - Resolve BLE connectivity
           - Shelly BT gateway only does passive scanning, cannot connect
           - ESPHome BT proxy (esp32-bt-proxy-gastrum) with active: true
@@ -98,10 +104,21 @@ PHASE 4: TESTING & VALIDATION
 
 PHASE 5: ENHANCEMENTS (post-testing)
 ======================================
-[ ] 5.1 - Implement O command parsing (calibration offset read)
-          to improve WME accuracy
-[ ] 5.2 - Add options flow to change polling interval after setup [DONE in 3.4]
+[x] 5.1 - Implement O command calibration in parser.py
+          - GetCalibratedWme: O command data → piecewise linear interpolation
+            against NominalCalibrationConstants [1320, 1820, 2690, 4000]
+          - GetVoltageCompensatedWme: added _BATTERY_TABLE (26 entries) and
+            _voltage_compensate_wme; step was missing entirely before
+          - Fixed ÷100 inside _calibrate_wme (was being applied twice)
+          - Confirmed: sydvägg 12.4%, nordvägg 22.2% — matches app exactly
+[x] 5.2 - Add options flow to change polling interval after setup [DONE in 3.4]
 [ ] 5.3 - Submit to HACS default repository
+[ ] 5.4 - Add graphs/screenshots to README
+[ ] 5.5 - Add integration icon (icon.png or MDI icon in manifest)
+[x] 5.6 - Disable Fetch History button while running; prevent duplicate fetches;
+          log fetch start/complete at WARNING/INFO level (visible in HA logs)
+[x] 5.7 - Add "Last reading" timestamp sensor (SensorDeviceClass.TIMESTAMP)
+          showing when the most-recent device record was captured
 
 
 PHASE 6: DOCUMENTATION
