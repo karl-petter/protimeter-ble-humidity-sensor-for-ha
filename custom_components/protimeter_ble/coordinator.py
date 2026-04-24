@@ -62,6 +62,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._entry = entry
         self.address: str = entry.data["address"].upper()
+        self._fetching: bool = False
         fetch_days: int = entry.options.get(
             CONF_FETCH_INTERVAL_DAYS,
             entry.data.get(CONF_FETCH_INTERVAL_DAYS, DEFAULT_FETCH_INTERVAL_DAYS),
@@ -74,6 +75,11 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         )
 
     # ── Public helpers ─────────────────────────────────────────────────────────
+
+    @property
+    def fetching(self) -> bool:
+        """True while a history fetch is in progress."""
+        return self._fetching
 
     @property
     def last_record_id(self) -> int | None:
@@ -89,6 +95,26 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
 
     async def _fetch_history(self) -> ProtimeterRecord | None:
         """Connect to the device and import any new history records."""
+        if self._fetching:
+            _LOGGER.warning(
+                "Protimeter %s: fetch already in progress, ignoring duplicate request",
+                self.address,
+            )
+            return self.data
+
+        self._fetching = True
+        self.async_update_listeners()
+        _LOGGER.warning("Protimeter %s: starting history fetch", self.address)
+
+        try:
+            return await self._do_fetch()
+        finally:
+            self._fetching = False
+            # async_update_listeners is called by the coordinator framework after
+            # _async_update_data returns, so the button re-enables automatically.
+
+    async def _do_fetch(self) -> ProtimeterRecord | None:
+        """Inner fetch — called only when no fetch is already running."""
         device = async_ble_device_from_address(
             self.hass, self.address, connectable=True
         )

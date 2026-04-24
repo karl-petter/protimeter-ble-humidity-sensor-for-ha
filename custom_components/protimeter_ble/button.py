@@ -45,6 +45,11 @@ class ProtimeterFetchButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEnti
             model="BLE Humidity Sensor",
         )
 
+    @property
+    def available(self) -> bool:
+        """Grey out the button while a fetch is already running."""
+        return super().available and not self.coordinator.fetching
+
     async def async_press(self) -> None:
         """Trigger an immediate history fetch."""
         await self.coordinator.async_refresh()
