@@ -120,6 +120,12 @@ class ProtimeterSensor(
         )
 
     @property
+    def available(self) -> bool:
+        # Stay available as long as we have data — a failed fetch doesn't
+        # invalidate historical values that are already stored locally.
+        return self.coordinator.data is not None
+
+    @property
     def native_value(self) -> float | int | None:
         if self.coordinator.data is None:
             return None
@@ -148,6 +154,10 @@ class ProtimeterTimestampSensor(
             manufacturer="Protimeter",
             model="BLE Humidity Sensor",
         )
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.data is not None
 
     @property
     def native_value(self) -> datetime | None:
