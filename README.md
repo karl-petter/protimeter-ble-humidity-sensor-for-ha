@@ -30,7 +30,7 @@ as HA statistics for graphing and automations.
   
   > **Note:** Passive-only adapters (e.g. Shelly BT Gateway) cannot establish BLE connections and will not work.
 
-- Protimeter BLE humidity sensor
+- Protimeter BLE humidity sensor (MAC prefix `00:22:A3:…`)
 
 ---
 
@@ -67,7 +67,7 @@ and optionally set a friendly name and fetch interval.
 
 1. **Settings → Devices & Services → Add Integration**
 2. Search for **Protimeter BLE**
-3. Enter the device MAC address (e.g. `AA:BB:CC:DD:EE:FF`)
+3. Enter the device MAC address (e.g. `00:22:A3:XX:XX:XX`)
 4. Set a friendly name and fetch interval
 
 ---

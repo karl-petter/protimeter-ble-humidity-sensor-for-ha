@@ -11,7 +11,7 @@ See [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) for methodology.
 The device advertises with service UUID `00005500-d102-11e1-9b23-00025b00a5a5`
 (`COMMAND_SERVICE_ID`). The local name in the scan response is `Protimeter_`
 followed by the last 8 hex characters of the MAC address
-(e.g. `Protimeter_aabbccdd` for MAC `AA:BB:CC:DD:EE:FF`).
+(e.g. `Protimeter_a300c757` for MAC `00:22:A3:00:C7:57`).
 
 ---
 
@@ -78,7 +78,7 @@ Offset  Length  Field
   6       1     XOR checksum of bytes 4–5
 ```
 
-Example: `aa bb cc dd 01 42 c3` → MAC tail=aabbccdd, count=0x0142=322.
+Example: `a3 00 c7 57 01 42 43` → MAC tail=a300c757, count=0x0142=322.
 
 ---
 

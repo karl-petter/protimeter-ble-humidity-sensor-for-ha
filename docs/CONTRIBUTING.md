@@ -112,10 +112,10 @@ pip install -r requirements.txt   # bleak
 python3 scripts/01_ble_scanner.py
 
 # Dump full GATT service/characteristic tree
-python3 scripts/02_device_connector.py AA:BB:CC:DD:EE:FF
+python3 scripts/02_device_connector.py 00:22:A3:XX:XX:XX
 
 # Subscribe to notifications and log raw bytes for 30 s
-python3 scripts/05_notification_logger.py AA:BB:CC:DD:EE:FF 30
+python3 scripts/05_notification_logger.py 00:22:A3:XX:XX:XX 30
 ```
 
 ---

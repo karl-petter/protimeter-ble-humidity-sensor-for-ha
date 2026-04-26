@@ -3,8 +3,8 @@ Parser unit tests using real BLE notification bytes captured from the debug log
 (2026-04-23 20:25 fetch).
 
 Sensor addresses:
-  Sensor A (south wall)  00:22:A3:00:C7:57
-  Sensor B (north wall)  00:22:A3:00:C3:0E
+  Sensor A  00:22:A3:00:C7:57
+  Sensor B  00:22:A3:00:C3:0E
 
 Expected values are cross-referenced against the official Protimeter app.
 """
