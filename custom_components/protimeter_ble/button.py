@@ -47,8 +47,12 @@ class ProtimeterFetchButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEnti
 
     @property
     def available(self) -> bool:
-        """Grey out the button while a fetch is already running."""
-        return super().available and not self.coordinator.fetching
+        """Grey out the button only while a fetch is running.
+
+        Unlike sensors (which go unavailable when last_update_success is False),
+        the button must stay clickable after a failed fetch so the user can retry.
+        """
+        return not self.coordinator.fetching
 
     async def async_press(self) -> None:
         """Trigger an immediate history fetch."""

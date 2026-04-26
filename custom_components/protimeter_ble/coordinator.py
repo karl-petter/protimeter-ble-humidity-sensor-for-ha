@@ -63,6 +63,10 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         self._entry = entry
         self.address: str = entry.data["address"].upper()
         self._fetching: bool = False
+        self._consecutive_failures: int = 0
+        self._notification_id = (
+            f"protimeter_ble_{self.address.lower().replace(':', '')}_error"
+        )
         fetch_days: int = entry.options.get(
             CONF_FETCH_INTERVAL_DAYS,
             entry.data.get(CONF_FETCH_INTERVAL_DAYS, DEFAULT_FETCH_INTERVAL_DAYS),
@@ -107,7 +111,45 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         _LOGGER.warning("Protimeter %s: starting history fetch", self.address)
 
         try:
-            return await self._do_fetch()
+            result = await self._do_fetch()
+            # Success — reset failure tracking and dismiss any outstanding notification
+            if self._consecutive_failures > 0:
+                self._consecutive_failures = 0
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        "persistent_notification",
+                        "dismiss",
+                        {"notification_id": self._notification_id},
+                        blocking=False,
+                    )
+                )
+            return result
+        except UpdateFailed as exc:
+            self._consecutive_failures += 1
+            _LOGGER.warning(
+                "Protimeter %s: fetch failed (consecutive failures: %d) — %s",
+                self.address, self._consecutive_failures, exc,
+            )
+            if self._consecutive_failures >= 3:
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": f"Protimeter {self.address} unreachable",
+                            "message": (
+                                f"{exc}\n\n"
+                                f"Failed to fetch history {self._consecutive_failures} "
+                                f"time(s) in a row. Check device battery and BLE proxy "
+                                f"placement. This notification will clear automatically "
+                                f"when the next fetch succeeds."
+                            ),
+                            "notification_id": self._notification_id,
+                        },
+                        blocking=False,
+                    )
+                )
+            raise
         finally:
             self._fetching = False
             # async_update_listeners is called by the coordinator framework after
