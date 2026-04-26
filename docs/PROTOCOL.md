@@ -11,7 +11,7 @@ See [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) for methodology.
 The device advertises with service UUID `00005500-d102-11e1-9b23-00025b00a5a5`
 (`COMMAND_SERVICE_ID`). The local name in the scan response is `Protimeter_`
 followed by the last 8 hex characters of the MAC address
-(e.g. `Protimeter_a300c757` for MAC `00:22:A3:00:C7:57`).
+(e.g. `Protimeter_aabbccdd` for MAC `AA:BB:CC:DD:EE:FF`).
 
 ---
 
@@ -71,14 +71,14 @@ All commands are sent as ASCII bytes to `COMMAND_CHARACTERISTIC_ID`.
 
 Write the single byte `0x43`. The device responds with a **7-byte** notification:
 
-```
+```text
 Offset  Length  Field
   0       4     Device MAC address bytes 3–6
   4       2     Record count, big-endian uint16
   6       1     XOR checksum of bytes 4–5
 ```
 
-Example: `a3 00 c7 57 01 42 43` → MAC=a300c757, count=0x0142=322.
+Example: `aa bb cc dd 01 42 c3` → MAC tail=aabbccdd, count=0x0142=322.
 
 ---
 
@@ -87,7 +87,7 @@ Example: `a3 00 c7 57 01 42 43` → MAC=a300c757, count=0x0142=322.
 Write the single byte `0x4F`. The device responds with **4 × 19-byte** notifications
 (one per calibration slot). The integration waits for all 4.
 
-```
+```text
 Offset  Length  Field
   0       4     Device MAC address bytes 3–6
   4       1     Calibration slot index (1–4)
@@ -106,7 +106,7 @@ calibration curve in `GetCalibratedWme` (see WME pipeline, stage 4).
 
 6-byte payload:
 
-```
+```text
 Byte 0:   0x52  ('R')
 Byte 1-2: start index, big-endian uint16 (1-based)
 Byte 3-4: end index,   big-endian uint16 (1-based)
@@ -120,7 +120,7 @@ The device sends one **20-byte** notification per record (see History Record Res
 
 Example — fetch all 323 records (count = 0x0143):
 
-```
+```text
 52 01 43 01 43 00
    -----  -----
    start   end   checksum = 0x01^0x43^0x01^0x43 = 0x00 ✓
@@ -140,7 +140,7 @@ instead of live readings; this command is documented for completeness.
 
 8-byte payload:
 
-```
+```text
 Byte 0:   0x54  ('T')
 Byte 1:   year - 2000  (e.g. 2026 → 0x1A)
 Byte 2:   month  (1–12)
@@ -159,7 +159,7 @@ Byte 7:   XOR of bytes 1–6
 
 Response to command `S`.
 
-```
+```text
 Offset  Length  Field
   0       4     Unknown / status bytes
   4       2     Relative humidity, big-endian uint16
@@ -173,7 +173,7 @@ Offset  Length  Field
 
 Each notification in response to command `R`.
 
-```
+```text
 Offset  Length  Field
   0       4     Device MAC address bytes 3–6
   4       2     Record ID, big-endian uint16 (1-based)
@@ -318,6 +318,7 @@ the device's t_comp values to `NominalCalibrationConstants = [1320, 1820, 2690, 
 The result is divided by 100 to give a percentage.
 
 For each slot (sorted by slot index):
+
 1. Run `raw_int` and `temperature` from the O-response through stages 1–3 to get X
 2. Pair X with `NominalCalibrationConstants[slot_index]` as Y
 3. Interpolate to find the calibrated value for the current t_comp
@@ -350,7 +351,7 @@ return min(volt_comp, 100.0)
 
 ## Typical Connection Flow
 
-```
+```text
 1. Scan for devices advertising 00005500-d102-11e1-9b23-00025b00a5a5
 
 2. Connect and enable notifications on COMMAND_CHARACTERISTIC_ID

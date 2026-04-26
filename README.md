@@ -30,7 +30,7 @@ as HA statistics for graphing and automations.
   
   > **Note:** Passive-only adapters (e.g. Shelly BT Gateway) cannot establish BLE connections and will not work.
 
-- Protimeter BLE humidity sensor (tested with MAC prefix `00:22:A3:…`)
+- Protimeter BLE humidity sensor
 
 ---
 
@@ -67,7 +67,7 @@ and optionally set a friendly name and fetch interval.
 
 1. **Settings → Devices & Services → Add Integration**
 2. Search for **Protimeter BLE**
-3. Enter the device MAC address (e.g. `00:22:A3:00:C7:57`)
+3. Enter the device MAC address (e.g. `AA:BB:CC:DD:EE:FF`)
 4. Set a friendly name and fetch interval
 
 ---
@@ -96,11 +96,11 @@ with a `statistics-graph` card:
 
 ```yaml
 type: statistics-graph
-title: Sydvägg WME
+title: Basement South — WME
 period: day
 stat_type: mean
 entities:
-  - entity: sensor.protimeter_sydvagg_wood_moisture_equivalent
+  - entity: sensor.protimeter_basement_south_wood_moisture_equivalent
 ```
 
 ---

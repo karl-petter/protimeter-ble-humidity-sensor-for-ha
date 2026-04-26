@@ -3,8 +3,8 @@ Parser unit tests using real BLE notification bytes captured from the debug log
 (2026-04-23 20:25 fetch).
 
 Sensor addresses:
-  Sydvägg  00:22:A3:00:C7:57
-  Nordvägg 00:22:A3:00:C3:0E
+  Sensor A (south wall)  00:22:A3:00:C7:57
+  Sensor B (north wall)  00:22:A3:00:C3:0E
 
 Expected values are cross-referenced against the official Protimeter app.
 """
@@ -33,14 +33,14 @@ def _hex(s: str) -> bytes:
 
 # ── Calibration offsets (from O-command log, same fetch) ──────────────────────
 
-SYDVAGG_CAL = [
+SENSOR_A_CAL = [
     CalibrationOffset(slot=1, raw_int=304, temperature=21.6),
     CalibrationOffset(slot=2, raw_int=451, temperature=21.6),
     CalibrationOffset(slot=3, raw_int=635, temperature=21.6),
     CalibrationOffset(slot=4, raw_int=735, temperature=21.6),
 ]
 
-NORDVAGG_CAL = [
+SENSOR_B_CAL = [
     CalibrationOffset(slot=1, raw_int=302, temperature=18.1),
     CalibrationOffset(slot=2, raw_int=448, temperature=18.1),
     CalibrationOffset(slot=3, raw_int=635, temperature=18.1),
@@ -62,20 +62,20 @@ class TestHumidityDecode:
 
 class TestTemperatureDecode:
     def test_9_6_celsius(self):
-        # data[14]=0x4C, data[15]=0xF0 from sydvägg record 328
+        # data[14]=0x4C, data[15]=0xF0 from Sensor A record 328
         assert round(_decode_temperature(0x4C, 0xF0), 1) == 9.6
 
     def test_9_3_celsius(self):
-        # data[14]=0x4C, data[15]=0x84 from sydvägg record 326
+        # data[14]=0x4C, data[15]=0x84 from Sensor A record 326
         assert round(_decode_temperature(0x4C, 0x84), 1) == 9.3
 
     def test_8_1_celsius(self):
-        # data[14]=0x4A, data[15]=0xAC from nordvägg record 578
+        # data[14]=0x4A, data[15]=0xAC from Sensor B record 578
         assert round(_decode_temperature(0x4A, 0xAC), 1) == 8.1
 
 
 class TestWmePipeline:
-    """Step-by-step verification of the WME pipeline for sydvägg record 328."""
+    """Step-by-step verification of the WME pipeline for Sensor A record 328."""
 
     RAW_INT = 288  # 0x0120
 
@@ -90,8 +90,8 @@ class TestWmePipeline:
         assert _temperature_compensate_wme(1006, 9.589) == 989
 
     def test_calibrate_wme_sydvagg(self):
-        # t_comp=989 with sydvägg cal → calibrated ≈ 12.57%
-        cal = _calibrate_wme(989, SYDVAGG_CAL)
+        # t_comp=989 with Sensor A cal → calibrated ≈ 12.57%
+        cal = _calibrate_wme(989, SENSOR_A_CAL)
         assert cal == pytest.approx(12.57, abs=0.05)
 
     def test_voltage_compensate_wme_battery83(self):
@@ -108,7 +108,7 @@ class TestVoltageCompensate:
         assert result == pytest.approx(15.7, abs=0.1)
 
     def test_battery_72_nordvagg(self):
-        # For nordvägg record 578: battery=72, calibrated≈21.025 → ~22.2
+        # For Sensor B record 578: battery=72, calibrated≈21.025 → ~22.2
         result = _voltage_compensate_wme(72, 21.025)
         assert round(result, 1) == 22.2
 
@@ -117,7 +117,7 @@ class TestVoltageCompensate:
 
 class TestParseHistoryRecordSydvagg:
     """
-    Sydvägg records 324–328 from the 2026-04-23 fetch.
+    Sensor A records 324–328 from the 2026-04-23 fetch.
     App-confirmed values: record 326 → WME=12.2%, record 328 → WME=12.4%.
     """
 
@@ -131,7 +131,7 @@ class TestParseHistoryRecordSydvagg:
     }
 
     def _parse(self, record_id: int) -> ProtimeterRecord:
-        rec = parse_history_record(_hex(self.RECORDS[record_id]), SYDVAGG_CAL)
+        rec = parse_history_record(_hex(self.RECORDS[record_id]), SENSOR_A_CAL)
         assert rec is not None
         return rec
 
@@ -184,7 +184,7 @@ class TestParseHistoryRecordSydvagg:
 
 class TestParseHistoryRecordNordvagg:
     """
-    Nordvägg records 574–578 from the 2026-04-23 fetch.
+    Sensor B records 574–578 from the 2026-04-23 fetch.
     App-confirmed value: record 578 → WME=22.2%.
     """
 
@@ -197,7 +197,7 @@ class TestParseHistoryRecordNordvagg:
     }
 
     def _parse(self, record_id: int) -> ProtimeterRecord:
-        rec = parse_history_record(_hex(self.RECORDS[record_id]), NORDVAGG_CAL)
+        rec = parse_history_record(_hex(self.RECORDS[record_id]), SENSOR_B_CAL)
         assert rec is not None
         return rec
 
@@ -225,7 +225,7 @@ class TestParseHistoryRecordNordvagg:
 
     def test_all_records_parse(self):
         for rid in self.RECORDS:
-            rec = parse_history_record(_hex(self.RECORDS[rid]), NORDVAGG_CAL)
+            rec = parse_history_record(_hex(self.RECORDS[rid]), SENSOR_B_CAL)
             assert rec is not None, f"record {rid} failed to parse"
             assert rec.record_id == rid
 
