@@ -38,6 +38,7 @@ class ProtimeterSensorDescription(SensorEntityDescription):
 SENSOR_DESCRIPTIONS: tuple[ProtimeterSensorDescription, ...] = (
     ProtimeterSensorDescription(
         key="humidity",
+        translation_key="humidity",
         name="Humidity",
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.HUMIDITY,
@@ -47,6 +48,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtimeterSensorDescription, ...] = (
     ),
     ProtimeterSensorDescription(
         key="temperature",
+        translation_key="temperature",
         name="Temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -56,6 +58,7 @@ SENSOR_DESCRIPTIONS: tuple[ProtimeterSensorDescription, ...] = (
     ),
     ProtimeterSensorDescription(
         key="battery",
+        translation_key="battery",
         name="Battery",
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.BATTERY,
@@ -65,9 +68,9 @@ SENSOR_DESCRIPTIONS: tuple[ProtimeterSensorDescription, ...] = (
     ),
     ProtimeterSensorDescription(
         key="wme",
+        translation_key="wme",
         name="Wood Moisture Equivalent",
         native_unit_of_measurement=PERCENTAGE,
-        icon="mdi:tree",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         value_fn=lambda r: r.wme,
@@ -139,6 +142,7 @@ class ProtimeterTimestampSensor(
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_translation_key = "last_reading"
     _attr_name = "Last reading"
 
     def __init__(

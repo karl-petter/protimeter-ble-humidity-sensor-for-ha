@@ -1,0 +1,26 @@
+{
+  "entity": {
+    "button": {
+      "fetch_history": {
+        "default": "mdi:download"
+      }
+    },
+    "sensor": {
+      "battery": {
+        "default": "mdi:battery"
+      },
+      "humidity": {
+        "default": "mdi:water-percent"
+      },
+      "last_reading": {
+        "default": "mdi:clock-outline"
+      },
+      "temperature": {
+        "default": "mdi:thermometer"
+      },
+      "wme": {
+        "default": "mdi:tree"
+      }
+    }
+  }
+}

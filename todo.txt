@@ -112,9 +112,13 @@ PHASE 5: ENHANCEMENTS (post-testing)
           - Fixed ÷100 inside _calibrate_wme (was being applied twice)
           - Confirmed: sydvägg 12.4%, nordvägg 22.2% — matches app exactly
 [x] 5.2 - Add options flow to change polling interval after setup [DONE in 3.4]
+[x] 5.5 - Add integration icon (icon.png + icons.json with MDI entity icons)
+          - icon.png: AI-generated (Adobe Firefly), wood grain + water droplet, 256×256
+          - icons.json: MDI icons for all sensors and button via translation_key
 [ ] 5.3 - Submit to HACS default repository
-[ ] 5.4 - Add graphs/screenshots to README
-[ ] 5.5 - Add integration icon (icon.png or MDI icon in manifest)
+          - Requires PR to home-assistant/brands with icon.png under
+            custom_integrations/protimeter_ble/ before submitting to HACS
+[ ] 5.4 - Add graphs/screenshots to README (waiting for both sensors online)
 [x] 5.6 - Disable Fetch History button while running; prevent duplicate fetches;
           log fetch start/complete at WARNING/INFO level (visible in HA logs)
 [x] 5.7 - Add "Last reading" timestamp sensor (SensorDeviceClass.TIMESTAMP)

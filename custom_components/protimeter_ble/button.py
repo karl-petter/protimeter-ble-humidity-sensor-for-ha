@@ -28,8 +28,8 @@ class ProtimeterFetchButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEnti
     """Button that triggers an immediate history fetch from the device."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "fetch_history"
     _attr_name = "Fetch history"
-    _attr_icon = "mdi:download"
 
     def __init__(
         self,
