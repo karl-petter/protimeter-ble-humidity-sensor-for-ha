@@ -23,7 +23,7 @@ as HA statistics for graphing and automations.
 
 ## Requirements
 
-- Home Assistant 2024.x or later
+- Home Assistant 2026.3 or later
 - A **connectable** Bluetooth adapter reachable by your HA host:
   - USB Bluetooth dongle on the HA host, or
   - [ESPHome Bluetooth Proxy](https://esphome.io/components/bluetooth_proxy.html) with `active: true` placed near the sensor
@@ -82,6 +82,7 @@ and optionally set a friendly name and fetch interval.
 | Battery | % | `battery` | From most-recent stored record |
 | Last reading | — | `timestamp` | When the most-recent record was captured on the device |
 | Fetch history | — | button | Trigger an immediate history fetch |
+| Set device clock | — | button | Set the device RTC to the current HA time (use after battery swap) |
 
 Sensor values reflect the **most-recent record stored on the device**, not a live
 reading. The device records hourly; values update each time a fetch completes.
@@ -134,8 +135,11 @@ On each scheduled fetch (default: weekly) or when **Fetch history** is pressed:
 The device stores one record per hour. A weekly fetch retrieves ~168 records and
 completes in under a minute.
 
-If 3 consecutive fetches fail a persistent notification appears in HA with the
+If 3 consecutive fetches fail, a persistent notification appears in HA with the
 error detail and advice. It clears automatically when the next fetch succeeds.
+
+If the device clock appears wrong (e.g. after a battery swap), a notification
+prompts you to press **Set device clock** to sync the device RTC to HA's time.
 
 ---
 

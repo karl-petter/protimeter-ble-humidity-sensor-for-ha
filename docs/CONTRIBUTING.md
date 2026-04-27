@@ -62,6 +62,7 @@ coordinator.py   →  DataUpdateCoordinator
 sensor.py        →  5 CoordinatorEntity instances per device
                     (Humidity, Temperature, WME, Battery, Last reading)
 button.py        →  Fetch History button — triggers coordinator.async_refresh()
+                    Set device clock button — sends T command with current time
 parser.py        →  Pure Python, no HA dependencies. Decodes all BLE responses.
                     Unit-tested independently.
 ```
