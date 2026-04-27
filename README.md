@@ -103,12 +103,24 @@ with a `statistics-graph` card:
 
 ```yaml
 type: statistics-graph
-title: Basement South — WME
+title: Moisture in walls
+chart_type: line
 period: day
-stat_type: mean
+stat_types:
+  - mean
+days_to_show: 365
 entities:
-  - entity: sensor.protimeter_basement_south_wood_moisture_equivalent
+  - entity: protimeter_ble:0022a300c30e_wme
+    name: Moisture wood north wall
+  - entity: protimeter_ble:0022a300c757_wme
+    name: Moisture wood south wall
+  - entity: protimeter_ble:0022a300c30e_humidity
+    name: Moisture air north wall
+  - entity: protimeter_ble:0022a300c757_humidity
+    name: Moisture air south wall
 ```
+
+Replace the statistic IDs with your own device MAC addresses (lowercase, no colons).
 
 ---
 
