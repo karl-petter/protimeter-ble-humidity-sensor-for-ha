@@ -2,6 +2,8 @@
 
 A Home Assistant custom integration for the **[Protimeter BLE humidity sensor](https://www.protimeter.com/products/protimeter-bluetooth-le-hygrometer/)**.
 
+![Protimeter BLE sensor mounted in a wall cavity](docs/images/device-photo.jpg)
+
 Exposes humidity, temperature, Wood Moisture Equivalent (WME), battery level, and
 last-reading timestamp as HA sensor entities, with full long-term history imported
 as HA statistics for graphing and automations.
