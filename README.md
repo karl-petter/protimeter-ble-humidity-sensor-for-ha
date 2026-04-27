@@ -1,86 +1,152 @@
-# Protimeter BLE Humidity Sensor - Home Assistant Integration
+# Protimeter BLE — Home Assistant Integration
 
-This project aims to reverse engineer the Protimeter humidity sensor BLE protocol and create a Home Assistant custom integration for it.
+A Home Assistant custom integration for the **[Protimeter BLE humidity sensor](https://www.protimeter.com/products/protimeter-bluetooth-le-hygrometer/)**.
 
-## Project Status
+Exposes humidity, temperature, Wood Moisture Equivalent (WME), battery level, and
+last-reading timestamp as HA sensor entities, with full long-term history imported
+as HA statistics for graphing and automations.
 
-Currently in **Phase 1: BLE Discovery & Analysis**
+---
 
-## Prerequisites
+## Features
 
-- Raspberry Pi (or any Linux system with Bluetooth support)
-- Python 3.8+
-- pip
+- **5 sensor entities** per device: Humidity (%RH), Temperature (°C), WME (%), Battery (%), Last reading (timestamp)
+- **Full history import** — reads all records stored on the device and imports them as HA long-term statistics (hourly buckets)
+- **Incremental updates** — subsequent fetches only retrieve new records, preserving battery life
+- **Calibrated WME** — uses the device's built-in calibration offsets and battery-voltage compensation for accurate readings matching the official app
+- **Auto-discovery** via Home Assistant Bluetooth integration
+- **Manual MAC address entry** as fallback
+- **Configurable fetch interval** (default: 7 days)
+- **Multi-device support**
+
+---
+
+## Requirements
+
+- Home Assistant 2024.x or later
+- A **connectable** Bluetooth adapter reachable by your HA host:
+  - USB Bluetooth dongle on the HA host, or
+  - [ESPHome Bluetooth Proxy](https://esphome.io/components/bluetooth_proxy.html) with `active: true` placed near the sensor
+  
+  > **Note:** Passive-only adapters (e.g. Shelly BT Gateway) cannot establish BLE connections and will not work.
+
+- Protimeter BLE humidity sensor (MAC prefix `00:22:A3:…`)
+
+---
+
+## Installation
+
+### HACS (recommended)
+
+1. Open HACS → **Integrations** → ⋮ → **Custom repositories**
+2. Add this repository URL, category **Integration**
+3. Search for **Protimeter BLE** and install
+4. Restart Home Assistant
+
+### Manual
+
+1. Copy `custom_components/protimeter_ble/` into your HA config directory:
+
+   ```text
+   <config>/custom_components/protimeter_ble/
+   ```
+
+2. Restart Home Assistant
+
+---
 
 ## Setup
 
-### 1. Clone the repository
+### Auto-discovery
 
-```bash
-git clone https://github.com/karl-petter/protimeter-ble-humidity-sensor-for-ha.git
-cd protimeter-ble-humidity-sensor-for-ha
+If a connectable Bluetooth adapter can see the device advertising, a discovery
+notification appears in **Settings → Devices & Services**. Confirm the device
+and optionally set a friendly name and fetch interval.
+
+### Manual setup
+
+1. **Settings → Devices & Services → Add Integration**
+2. Search for **Protimeter BLE**
+3. Enter the device MAC address (e.g. `00:22:A3:XX:XX:XX`)
+4. Set a friendly name and fetch interval
+
+---
+
+## Sensors & controls
+
+| Entity | Unit | Device class | Notes |
+| --- | --- | --- | --- |
+| Humidity | % | `humidity` | From most-recent stored record |
+| Temperature | °C | `temperature` | From most-recent stored record |
+| Wood Moisture Equivalent | % | — | Calibrated using device O-command offsets + battery-voltage compensation |
+| Battery | % | `battery` | From most-recent stored record |
+| Last reading | — | `timestamp` | When the most-recent record was captured on the device |
+| Fetch history | — | button | Trigger an immediate history fetch |
+
+Sensor values reflect the **most-recent record stored on the device**, not a live
+reading. The device records hourly; values update each time a fetch completes.
+Sensors retain their last known values if a fetch fails.
+
+---
+
+## History graphs
+
+All four measurement sensors are imported as **HA long-term statistics**, viewable
+with a `statistics-graph` card:
+
+```yaml
+type: statistics-graph
+title: Basement South — WME
+period: day
+stat_type: mean
+entities:
+  - entity: sensor.protimeter_basement_south_wood_moisture_equivalent
 ```
 
-### 2. Create and activate virtual environment
+---
 
-```bash
-python3 -m venv venv
-source venv/bin/activate
+## ESPHome BLE proxy
+
+The Protimeter sensor uses GATT connections — passive-only Bluetooth adapters
+cannot be used. An ESPHome device with the BT proxy component works reliably:
+
+```yaml
+bluetooth_proxy:
+  active: true
 ```
 
-### 3. Install dependencies
+Place it within a few metres of the sensor. HA will route connections through it
+automatically.
 
-```bash
-pip install -r requirements.txt
-```
+---
 
-## Usage
+## How it works
 
-### Scan for BLE Devices
+On each scheduled fetch (default: weekly) or when **Fetch history** is pressed:
 
-To discover all available BLE devices:
+1. Connect to the device over BLE
+2. `C` command → read total record count
+3. `O` command → read 4 calibration offset slots
+4. `R` command → read new records (full history on first run; incremental thereafter)
+5. Import records into HA long-term statistics (hourly mean/min/max)
+6. Disconnect
 
-```bash
-python3 scripts/01_ble_scanner.py
-```
+The device stores one record per hour. A weekly fetch retrieves ~168 records and
+completes in under a minute.
 
-This will display all discoverable BLE devices with their:
-- Friendly name
-- MAC address
-- Signal strength (RSSI)
-- UUIDs and other advertisement data
+If 3 consecutive fetches fail a persistent notification appears in HA with the
+error detail and advice. It clears automatically when the next fetch succeeds.
 
-### Connect to Device
+---
 
-(To be implemented - Phase 2)
+## Further reading
 
-## Project Structure
+- [BLE Protocol Specification](docs/PROTOCOL.md)
+- [Contributing / Developer Guide](docs/CONTRIBUTING.md)
+- [Reverse Engineering Notes](docs/REVERSE_ENGINEERING.md)
 
-```
-├── scripts/
-│   ├── 01_ble_scanner.py          # Scan for available BLE devices
-│   ├── 02_device_connector.py     # (WIP) Connect and explore device
-│   └── 03_packet_analyzer.py      # (WIP) Analyze BLE packets
-├── protimeter/
-│   └── (WIP) Python library for device communication
-├── custom_component/
-│   └── (WIP) Home Assistant integration
-├── requirements.txt               # Python dependencies
-├── todo.txt                      # Project tasks and status
-└── README.md                     # This file
-```
-
-## Resources
-
-- [Bleak - Python BLE Library](https://github.com/hynek/bleak)
-- [Bluetooth GATT Overview](https://www.bluetooth.com/specifications/gatt-overview/)
-- [Home Assistant Custom Components](https://developers.home-assistant.io/docs/creating_integration_manifest/)
+---
 
 ## License
 
-TBD
-
-## Notes
-
-- This is a reverse engineering project
-- Information about the Protimeter device protocol will be documented as discovered
+MIT

@@ -1,0 +1,19 @@
+{
+  "domain": "protimeter_ble",
+  "name": "Protimeter BLE",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/your-repo/protimeter-ble-humidity-sensor-for-ha",
+  "iot_class": "local_polling",
+  "dependencies": ["bluetooth"],
+  "bluetooth": [
+    {
+      "service_uuid": "00005500-d102-11e1-9b23-00025b00a5a5"
+    },
+    {
+      "local_name": "Protimeter_*"
+    }
+  ],
+  "codeowners": [],
+  "requirements": ["bleak-retry-connector>=3.0.0"]
+}

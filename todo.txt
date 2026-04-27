@@ -14,84 +14,145 @@ LEGEND:
 
 PHASE 1: BLE DISCOVERY & ANALYSIS
 ==================================
-[x] 1.1 - Install BLE scanning tools (bleak, pygatt, btllib)
-[x] 1.2 - Set up BLE device scanner script
-[x] 1.3 - Scan and identify Protimeter device MAC address (00:22:A3:00:C7:57)
+[x] 1.1 - Install BLE scanning tools (bleak)
+[x] 1.2 - Set up BLE device scanner script (01_ble_scanner.py)
+[x] 1.3 - Scan and identify device MAC addresses
+          - 00:22:A3:00:C7:57  (KällarväggSyd)
+          - 00:22:A3:00:C3:0E  (KällarväggNord)
 [x] 1.4 - Capture device advertisement data and UUIDs
-[x] 1.5 - Document device characteristics and services (GATT dump saved)
-[ -] 1.6 - Analyze BLE advertisement packets
+[x] 1.5 - Document device characteristics and services (GATT dump)
+[x] 1.6 - Capture HCI logs from Android phone (btsnoop_hci.log)
+[x] 1.7 - Analyse HCI logs with tshark, identify command bytes
+
 
 PHASE 2: PROTOCOL REVERSE ENGINEERING
 ======================================
 [x] 2.1 - Connect to device and enumerate all services
 [x] 2.2 - Enumerate all characteristics and their properties
-[ -] 2.3 - Create packet capture/logging mechanism
+[x] 2.3 - Capture and log BLE notifications (05_notification_logger.py)
 [x] 2.4 - Document all GATT services and characteristics
-[ ] 2.5 - Analyze humidity data packets
-[ ] 2.6 - Reverse engineer data format (byte structure)
-[ ] 2.7 - Test reading capabilities for each characteristic
-[ ] 2.8 - Identify notification/indication patterns
-[ ] 2.9 - Document complete protocol specification
+[x] 2.5 - Identify command codes (S, R, C, O, L, T, F, A, I, D)
+[x] 2.6 - Decompile Android APK (jadx + monodis for .NET DLL)
+[x] 2.7 - Extract exact byte-parsing formulas from ProtimeterApp.dll
+[x] 2.8 - Verify decoding formulas against captured data
+          - Humidity: 0x30 0x60 → 75.6 %RH ✓
+          - Temperature: 0x49 0xA0 → 7.45 °C ✓
+          - Timestamp: 1a 01 1c 09 2c 1f → 2026-01-28 09:44:31 ✓
+[x] 2.9 - Export ~520 historical readings from both sensors
+[x] 2.10 - Document complete protocol specification (PROTOCOL.md)
 
-PHASE 3: PYTHON LIBRARY DEVELOPMENT
-====================================
-[ ] 3.1 - Create project structure for Python library
-[ ] 3.2 - Implement device connection class
-[ ] 3.3 - Implement humidity sensor reading methods
-[ ] 3.4 - Implement battery status reading (if available)
-[ ] 3.5 - Implement data parsing and validation
-[ ] 3.6 - Add error handling and reconnection logic
-[ ] 3.7 - Create unit tests for data parsing
-[ ] 3.8 - Test library with real device
 
-PHASE 4: HOME ASSISTANT INTEGRATION
-====================================
-[ ] 4.1 - Create Home Assistant custom component structure
-[ ] 4.2 - Implement config flow for device discovery
-[ ] 4.3 - Create device entity with humidity sensor
-[ ] 4.4 - Implement battery sensor (if available)
-[ ] 4.5 - Set up update interval and async refresh
-[ ] 4.6 - Add device info entity
-[ ] 4.7 - Implement proper error handling and recovery
-[ ] 4.8 - Add configuration options (polling interval, etc.)
+PHASE 3: PYTHON LIBRARY / INTEGRATION
+======================================
+[x] 3.1 - Create integration directory structure
+          (custom_components/protimeter_ble/)
+[x] 3.2 - Implement protocol parser (parser.py)
+          - decode_humidity, decode_temperature, decode_battery
+          - decode_wme (with AdcTable + temperature compensation)
+          - parse_current_reading, parse_history_record
+          - build_history_request
+[x] 3.3 - Implement BLE coordinator (coordinator.py)
+          - History-based fetch (C command + R command)
+          - bleak-retry-connector for reliable connections
+          - Full history on first run; incremental (with overlap) on subsequent
+          - Imports records as HA long-term statistics
+          - Background task on startup (non-blocking)
+[x] 3.4 - Implement config flow (config_flow.py)
+          - Bluetooth auto-discovery (fixed: correct advertised UUID
+            00005500-d102-11e1-9b23-00025b00a5a5 + local_name Protimeter_*)
+          - Device picker step (discovered devices)
+          - Manual MAC address entry fallback
+          - Options flow (change fetch interval after setup)
+[x] 3.5 - Implement sensor entities (sensor.py)
+          - Humidity (%RH), Temperature (°C), Battery (%), WME (%)
+          - Values from most recent historical record
+[x] 3.6 - Implement button entity (button.py)
+          - "Fetch history" button for on-demand reads
+[x] 3.7 - Create manifest.json with correct BT UUID matcher
+[x] 3.8 - Create strings/translations files
 
-PHASE 5: TESTING & VALIDATION
+
+PHASE 4: TESTING & VALIDATION
 ==============================
-[ ] 5.1 - Test Home Assistant integration with device
-[ ] 5.2 - Test device reconnection and recovery
-[ ] 5.3 - Test sensor value updates
-[ ] 5.4 - Test battery level updates (if applicable)
-[ ] 5.5 - Test multiple devices
-[ ] 5.6 - Verify no memory leaks
-[ ] 5.7 - Test edge cases and error conditions
+[x] 4.1 - Install integration on Home Assistant instance
+[x] 4.2 - Confirm auto-discovery works (both devices discovered)
+          - Fixed: manifest.json had wrong advertised UUID (5b00a5a5-...)
+          - Correct UUID verified from btsnoop HCI logs
+[x] 4.3 - Verify sensor values match official app readings
+          - RH 74.8%, Temp 9.3°C match exactly
+          - WME 12.2% (app) = 12.2% (HA after revert to t_comp/100)
+          - CalibrationOffsetTable was a red herring; correct fallback is t_comp/100
+[x] 4.4 - Verify history is imported as HA long-term statistics
+          - 315/323 hourly buckets confirmed written to recorder
+          - Displaying correctly in statistics-graph card with period: day
+[x] 4.5 - Test incremental fetch (overlap verification)
+          - HISTORY_OVERLAP=5 confirmed working; start=max(1, last_id-4)
+[x] 4.6 - Test "Fetch history" button
+          - Confirmed: button triggers async_refresh → full/incremental fetch
+[x] 4.7 - Test options flow (change fetch interval)
+          - Confirmed: options dialog saves and persists new value correctly
+[x] 4.8 - Test with both sensors simultaneously
+[x] 4.9 - BLE error monitoring implemented
+          - Persistent HA notification after 3 consecutive fetch failures
+          - Auto-dismissed when next fetch succeeds
+          - Both sensors running without issues
+[x] 4.10 - Resolve BLE connectivity
+          - Shelly BT gateway only does passive scanning, cannot connect
+          - ESPHome BT proxy (esp32-bt-proxy-gastrum) with active: true
+            deployed near sensors — confirmed working
+[x] 4.10.1 - Add parser unit tests (tests/test_parser.py) using real BLE bytes
+             from debug log; 33 tests, all passing; cross-referenced against app
+[x] 4.11 - Nordvägg BLE connectivity resolved
+          - Root cause: dead battery (drained ~5 days after last reading)
+          - Fixed: battery replaced; device re-added to HA; both sensors online
+
+
+PHASE 5: ENHANCEMENTS (post-testing)
+======================================
+[x] 5.1 - Implement O command calibration in parser.py
+          - GetCalibratedWme: O command data → piecewise linear interpolation
+            against NominalCalibrationConstants [1320, 1820, 2690, 4000]
+          - GetVoltageCompensatedWme: added _BATTERY_TABLE (26 entries) and
+            _voltage_compensate_wme; step was missing entirely before
+          - Fixed ÷100 inside _calibrate_wme (was being applied twice)
+          - Confirmed: sydvägg 12.4%, nordvägg 22.2% — matches app exactly
+[x] 5.2 - Add options flow to change polling interval after setup [DONE in 3.4]
+[x] 5.5 - Add integration icon (icon.png + icons.json with MDI entity icons)
+          - icon.png: AI-generated (Adobe Firefly), wood grain + water droplet, 256×256
+          - icons.json: MDI icons for all sensors and button via translation_key
+[ ] 5.4 - Add graphs/screenshots to README (both sensors now online — ready)
+[ ] 5.3 - Submit to HACS default repository
+          - Step 1: PR to home-assistant/brands with icon.png under
+            custom_integrations/protimeter_ble/
+          - Step 2: PR to hacs/default repository
+[x] 5.6 - Disable Fetch History button while running; prevent duplicate fetches;
+          log fetch start/complete at WARNING/INFO level (visible in HA logs)
+[x] 5.7 - Add "Last reading" timestamp sensor (SensorDeviceClass.TIMESTAMP)
+          showing when the most-recent device record was captured
+[x] 5.8 - Device clock detection and Set device clock button
+          - Detects three RTC failure modes: year out of range, most-recent record
+            in the future by >5 min, consecutive records going backwards
+          - Raises persistent HA notification with link to Set device clock button
+          - T command implemented in parser.py (build_set_clock_command)
+          - Corrected PROTOCOL.md: S response has no device timestamp
+
 
 PHASE 6: DOCUMENTATION
-======================
-[ ] 6.1 - Document BLE protocol specification
-[ ] 6.2 - Create README for Home Assistant integration
-[ ] 6.3 - Document installation instructions
-[ ] 6.4 - Document configuration options
-[ ] 6.5 - Create troubleshooting guide
-[ ] 6.6 - Add code comments and docstrings
+========================
+[x] 6.1 - Document BLE protocol specification (PROTOCOL.md)
+[x] 6.2 - Write README with installation and usage instructions
+[x] 6.3 - Document project notes and architecture (PROJECT_NOTES.md)
+[x] 6.4 - Update phase checklist (this file)
 
 
 NOTES:
 ------
-- Device: Protimeter Humidity Sensor
-- Target Platform: Home Assistant
-- BLE Discovery Method: TBD (airbob, bleak, or native)
-- Data Format: TBD (need to analyze)
-
-BTSNOOP LOGS:
-- Location: btsnoop-hci-logs/
-- Files:
-	- btsnoop_hci-20260215-110815.log
-	- btsnoop_hci-20260215-112234.log
-	- btsnoop_hci-20260215-113141.log
-
-
-RESOURCES:
-----------
-- Home Assistant Custom Integration Template: https://github.com/custom-components/integration_blueprint
-- Bleak BLE Library: https://github.com/hynek/bleak
-- BLE GATT Documentation: https://www.bluetooth.com/specifications/gatt-overview/
+- Devices: 2× Protimeter BLE Humidity Sensor (installed in cellar)
+- Target Platform: Home Assistant (custom_components)
+- BLE library: bleak + bleak-retry-connector (via HA bluetooth integration)
+- Protocol source: ProtimeterApp.dll (Xamarin/.NET, decompiled with monodis)
+- Data format: fully reverse-engineered and verified against captured data
+- Design: history-based (device records on its own schedule; HA reads
+  history periodically — default weekly — to preserve battery life)
+- BT connectivity: requires ESPHome proxy with active: true near sensors
+  (Shelly BT gateway is passive-only and cannot establish connections)

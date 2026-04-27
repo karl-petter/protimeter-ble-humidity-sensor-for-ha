@@ -45,3 +45,9 @@ env/
 
 # Home Assistant
 custom_components/protimeter/manifest.json.bak
+
+# APK — copyrighted software, do not distribute
+apk/
+
+# Claude Code session memory — local only
+.claude/

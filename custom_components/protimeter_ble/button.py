@@ -1,0 +1,93 @@
+"""Button platform for Protimeter BLE — manual history fetch trigger."""
+
+from __future__ import annotations
+
+from homeassistant.components.button import ButtonEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_NAME
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import DOMAIN
+from .coordinator import ProtimeterCoordinator
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up button entities from a config entry."""
+    coordinator: ProtimeterCoordinator = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities([
+        ProtimeterFetchButton(coordinator, entry),
+        ProtimeterSetClockButton(coordinator, entry),
+    ])
+
+
+class ProtimeterFetchButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEntity):
+    """Button that triggers an immediate history fetch from the device."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "fetch_history"
+    _attr_name = "Fetch history"
+
+    def __init__(
+        self,
+        coordinator: ProtimeterCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.address}_fetch_history"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.address)},
+            name=entry.data.get(CONF_NAME, coordinator.address),
+            manufacturer="Protimeter",
+            model="BLE Humidity Sensor",
+        )
+
+    @property
+    def available(self) -> bool:
+        """Grey out the button only while a fetch is running.
+
+        Unlike sensors (which go unavailable when last_update_success is False),
+        the button must stay clickable after a failed fetch so the user can retry.
+        """
+        return not self.coordinator.fetching
+
+    async def async_press(self) -> None:
+        """Trigger an immediate history fetch."""
+        await self.coordinator.async_refresh()
+
+
+class ProtimeterSetClockButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEntity):
+    """Button that sets the device real-time clock to the current HA time."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "set_clock"
+    _attr_name = "Set device clock"
+
+    def __init__(
+        self,
+        coordinator: ProtimeterCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.address}_set_clock"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.address)},
+            name=entry.data.get(CONF_NAME, coordinator.address),
+            manufacturer="Protimeter",
+            model="BLE Humidity Sensor",
+        )
+
+    @property
+    def available(self) -> bool:
+        """Unavailable while any BLE operation is running."""
+        return not self.coordinator.fetching and not self.coordinator.setting_clock
+
+    async def async_press(self) -> None:
+        """Set the device clock to the current time."""
+        await self.coordinator.async_set_clock()
