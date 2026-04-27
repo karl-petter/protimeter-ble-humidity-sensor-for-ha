@@ -117,14 +117,22 @@ PHASE 5: ENHANCEMENTS (post-testing)
           - Fixed ÷100 inside _calibrate_wme (was being applied twice)
           - Confirmed: sydvägg 12.4%, nordvägg 22.2% — matches app exactly
 [x] 5.2 - Add options flow to change polling interval after setup [DONE in 3.4]
-[x] 5.5 - Add integration icon (icon.png + icons.json with MDI entity icons)
-          - icon.png: AI-generated (Adobe Firefly), wood grain + water droplet, 256×256
-          - icons.json: MDI icons for all sensors and button via translation_key
+[x] 5.5 - Add integration icon (brand/ + icons.json with MDI entity icons)
+          - brand/icon.png (256×256) and brand/icon@2x.png (512×512): AI-generated
+            (Adobe Firefly), wood grain + water droplet concept
+          - HA 2026.3+ serves icons from brand/ directly; brands repo no longer
+            accepts custom integrations
+          - icons.json: MDI icons for all sensors and buttons via translation_key
 [ ] 5.4 - Add graphs/screenshots to README (both sensors now online — ready)
+[ ] 5.9 - Git versioning and v1.0.0 release
+          - Update manifest.json version to 1.0.0
+          - Merge ha-integration-v1 PR into main
+          - Tag v1.0.0 on main
+          - Create GitHub release with release notes
 [ ] 5.3 - Submit to HACS default repository
-          - Step 1: PR to home-assistant/brands with icon.png under
-            custom_integrations/protimeter_ble/
-          - Step 2: PR to hacs/default repository
+          - Step 1: home-assistant/brands PR submitted (home-assistant/brands#10212)
+            waiting for merge
+          - Step 2: PR to hacs/default repository (requires tagged release first)
 [x] 5.6 - Disable Fetch History button while running; prevent duplicate fetches;
           log fetch start/complete at WARNING/INFO level (visible in HA logs)
 [x] 5.7 - Add "Last reading" timestamp sensor (SensorDeviceClass.TIMESTAMP)
