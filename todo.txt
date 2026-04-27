@@ -123,16 +123,14 @@ PHASE 5: ENHANCEMENTS (post-testing)
           - HA 2026.3+ serves icons from brand/ directly; brands repo no longer
             accepts custom integrations
           - icons.json: MDI icons for all sensors and buttons via translation_key
-[ ] 5.4 - Add graphs/screenshots to README (both sensors now online — ready)
-[ ] 5.9 - Git versioning and v1.0.0 release
-          - Update manifest.json version to 1.0.0
-          - Merge ha-integration-v1 PR into main
-          - Tag v1.0.0 on main
-          - Create GitHub release with release notes
+[x] 5.4 - Add screenshots to README (device page, statistics graph, integrations card)
+[x] 5.9 - Git versioning and v1.0.0 release
+          - manifest.json bumped to 1.0.0; documentation URL and codeowners fixed
+          - Merged ha-integration-v1 into main
+          - Tagged v1.0.0 and created GitHub release
 [ ] 5.3 - Submit to HACS default repository
-          - Step 1: home-assistant/brands PR submitted (home-assistant/brands#10212)
-            waiting for merge
-          - Step 2: PR to hacs/default repository (requires tagged release first)
+          - brands repo no longer needed (HA 2026.3 serves from brand/ directly)
+          - PR to hacs/default repository
 [x] 5.6 - Disable Fetch History button while running; prevent duplicate fetches;
           log fetch start/complete at WARNING/INFO level (visible in HA logs)
 [x] 5.7 - Add "Last reading" timestamp sensor (SensorDeviceClass.TIMESTAMP)
