@@ -6,6 +6,8 @@ Exposes humidity, temperature, Wood Moisture Equivalent (WME), battery level, an
 last-reading timestamp as HA sensor entities, with full long-term history imported
 as HA statistics for graphing and automations.
 
+![Integration card](docs/images/screenshot-integrations.png)
+
 ---
 
 ## Features
@@ -74,6 +76,8 @@ and optionally set a friendly name and fetch interval.
 
 ## Sensors & controls
 
+![Device page](docs/images/screenshot-device.png)
+
 | Entity | Unit | Device class | Notes |
 | --- | --- | --- | --- |
 | Humidity | % | `humidity` | From most-recent stored record |
@@ -91,6 +95,8 @@ Sensors retain their last known values if a fetch fails.
 ---
 
 ## History graphs
+
+![Statistics graph](docs/images/screenshot-graph.png)
 
 All four measurement sensors are imported as **HA long-term statistics**, viewable
 with a `statistics-graph` card:
