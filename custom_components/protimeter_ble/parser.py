@@ -9,6 +9,7 @@ See PROTOCOL.md for the full specification.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from .const import CURRENT_READING_LEN, HISTORY_RECORD_LEN
 
@@ -392,7 +393,6 @@ def parse_history_record(
     if not data or len(data) < HISTORY_RECORD_LEN:
         return None
 
-    from datetime import datetime
     century = (datetime.utcnow().year // 100) * 100
     year = century + data[6]
 
@@ -411,6 +411,28 @@ def parse_history_record(
         wme         = round(_decode_wme(_u16(data[16], data[17]), temp, battery, cal_offsets), 1),
         battery     = battery,
     )
+
+
+def build_set_clock_command(dt: "datetime") -> bytes:
+    """
+    Build the 8-byte payload for command 'T' (set real-time clock).
+
+    Format:
+      [0]  0x54  ('T')
+      [1]  year - 2000  (e.g. 2026 → 0x1A)
+      [2]  month  (1–12)
+      [3]  day    (1–31)
+      [4]  hour   (0–23)
+      [5]  minute (0–59)
+      [6]  second (0–59)
+      [7]  XOR of bytes 1–6
+    """
+    year_byte = dt.year - 2000
+    payload = [year_byte, dt.month, dt.day, dt.hour, dt.minute, dt.second]
+    checksum = 0
+    for b in payload:
+        checksum ^= b
+    return bytes([0x54] + payload + [checksum])
 
 
 def build_history_request(start: int, end: int) -> bytes:

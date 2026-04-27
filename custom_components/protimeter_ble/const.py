@@ -55,6 +55,11 @@ HISTORY_OVERLAP = 5
 BLE_CONNECT_TIMEOUT_S  = 20
 BLE_RESPONSE_TIMEOUT_S = 15    # timeout for a single command response (C command)
 
+# If the most-recent device record is more than this many minutes ahead of the
+# host clock, or if consecutive records go backwards in time, a clock-warning
+# notification is raised.
+CLOCK_SKEW_THRESHOLD_MINUTES = 5
+
 # ── Expected response sizes ────────────────────────────────────────────────────
 
 CURRENT_READING_LEN = 12

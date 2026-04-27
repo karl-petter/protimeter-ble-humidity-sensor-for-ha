@@ -21,7 +21,10 @@ async def async_setup_entry(
 ) -> None:
     """Set up button entities from a config entry."""
     coordinator: ProtimeterCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([ProtimeterFetchButton(coordinator, entry)])
+    async_add_entities([
+        ProtimeterFetchButton(coordinator, entry),
+        ProtimeterSetClockButton(coordinator, entry),
+    ])
 
 
 class ProtimeterFetchButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEntity):
@@ -57,3 +60,34 @@ class ProtimeterFetchButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEnti
     async def async_press(self) -> None:
         """Trigger an immediate history fetch."""
         await self.coordinator.async_refresh()
+
+
+class ProtimeterSetClockButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEntity):
+    """Button that sets the device real-time clock to the current HA time."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "set_clock"
+    _attr_name = "Set device clock"
+
+    def __init__(
+        self,
+        coordinator: ProtimeterCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.address}_set_clock"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.address)},
+            name=entry.data.get(CONF_NAME, coordinator.address),
+            manufacturer="Protimeter",
+            model="BLE Humidity Sensor",
+        )
+
+    @property
+    def available(self) -> bool:
+        """Unavailable while any BLE operation is running."""
+        return not self.coordinator.fetching and not self.coordinator.setting_clock
+
+    async def async_press(self) -> None:
+        """Set the device clock to the current time."""
+        await self.coordinator.async_set_clock()

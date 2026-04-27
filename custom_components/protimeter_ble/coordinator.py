@@ -19,6 +19,7 @@ import homeassistant.util.dt as dt_util
 
 from .const import (
     BLE_RESPONSE_TIMEOUT_S,
+    CLOCK_SKEW_THRESHOLD_MINUTES,
     CMD_READ_CALIB,
     CMD_READ_COUNT,
     COMMAND_CHAR_UUID,
@@ -35,6 +36,7 @@ from .parser import (
     CalibrationOffset,
     ProtimeterRecord,
     build_history_request,
+    build_set_clock_command,
     parse_calibration_offset,
     parse_history_record,
 )
@@ -63,10 +65,11 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         self._entry = entry
         self.address: str = entry.data["address"].upper()
         self._fetching: bool = False
+        self._setting_clock: bool = False
         self._consecutive_failures: int = 0
-        self._notification_id = (
-            f"protimeter_ble_{self.address.lower().replace(':', '')}_error"
-        )
+        addr_slug = self.address.lower().replace(":", "")
+        self._notification_id = f"protimeter_ble_{addr_slug}_error"
+        self._clock_notification_id = f"protimeter_ble_{addr_slug}_clock"
         fetch_days: int = entry.options.get(
             CONF_FETCH_INTERVAL_DAYS,
             entry.data.get(CONF_FETCH_INTERVAL_DAYS, DEFAULT_FETCH_INTERVAL_DAYS),
@@ -84,6 +87,60 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
     def fetching(self) -> bool:
         """True while a history fetch is in progress."""
         return self._fetching
+
+    @property
+    def setting_clock(self) -> bool:
+        """True while a clock-set operation is in progress."""
+        return self._setting_clock
+
+    async def async_set_clock(self) -> None:
+        """Connect to the device and set its real-time clock to the current time."""
+        if self._fetching or self._setting_clock:
+            _LOGGER.warning(
+                "Protimeter %s: clock-set skipped — another operation is in progress",
+                self.address,
+            )
+            return
+
+        self._setting_clock = True
+        self.async_update_listeners()
+        _LOGGER.warning("Protimeter %s: setting device clock", self.address)
+
+        try:
+            device = async_ble_device_from_address(
+                self.hass, self.address, connectable=True
+            )
+            if device is None:
+                raise UpdateFailed(
+                    f"Protimeter {self.address}: device not found — cannot set clock"
+                )
+
+            client = await establish_connection(BleakClient, device, self.address)
+            try:
+                cmd_uuid = self._discover_command_char(client)
+                now = dt_util.now().replace(tzinfo=None)  # local naive time
+                cmd = build_set_clock_command(now)
+                await client.write_gatt_char(cmd_uuid, cmd, response=True)
+                _LOGGER.warning(
+                    "Protimeter %s: clock set to %s", self.address, now.strftime("%Y-%m-%d %H:%M:%S")
+                )
+            finally:
+                await client.disconnect()
+
+            # Dismiss the clock warning notification if present
+            self.hass.async_create_task(
+                self.hass.services.async_call(
+                    "persistent_notification",
+                    "dismiss",
+                    {"notification_id": self._clock_notification_id},
+                    blocking=False,
+                )
+            )
+        except (asyncio.TimeoutError, BleakError, UpdateFailed) as exc:
+            _LOGGER.warning("Protimeter %s: failed to set clock — %s", self.address, exc)
+        finally:
+            self._setting_clock = False
+            self.async_update_listeners()
 
     @property
     def last_record_id(self) -> int | None:
@@ -228,7 +285,50 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         if not records:
             return self.data
 
-        self._import_statistics(records)
+        current_year = dt_util.now().year
+        valid_records = [r for r in records if 2020 <= r.year <= current_year + 1]
+        bogus_records = [r for r in records if r not in valid_records]
+        if bogus_records:
+            _LOGGER.warning(
+                "Protimeter %s: %d record(s) have implausible timestamps "
+                "(years: %s) — device RTC may have reset after a battery swap",
+                self.address, len(bogus_records),
+                sorted({r.year for r in bogus_records}),
+            )
+            self.hass.async_create_task(
+                self.hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": f"Protimeter {self.address}: clock needs setting",
+                        "message": (
+                            f"{len(bogus_records)} record(s) have implausible timestamps "
+                            f"(years: {sorted({r.year for r in bogus_records})}). "
+                            f"The device RTC likely reset after a battery swap. "
+                            f"Press **Set device clock** on the device page to fix this."
+                        ),
+                        "notification_id": self._clock_notification_id,
+                    },
+                    blocking=False,
+                )
+            )
+
+        if not valid_records:
+            _LOGGER.warning(
+                "Protimeter %s: all %d fetched records have implausible timestamps; "
+                "skipping import",
+                self.address, len(records),
+            )
+            return self.data
+
+        # Detect small clock offsets: compare the most-recent record's timestamp
+        # to now. Flag if it is more than CLOCK_SKEW_THRESHOLD_MINUTES in the future
+        # (clock running fast) or if any consecutive records go backwards in time
+        # (clock was reset mid-recording).
+        if not bogus_records:
+            self._check_clock_skew(valid_records)
+
+        self._import_statistics(valid_records)
 
         new_last_id = max(r.record_id for r in records)
         self.hass.config_entries.async_update_entry(
@@ -237,11 +337,11 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         )
         _LOGGER.info(
             "Protimeter %s: imported %d records, last_id=%d",
-            self.address, len(records), new_last_id,
+            self.address, len(valid_records), new_last_id,
         )
 
-        # Return the most-recent record as coordinator.data (shown on sensor entities)
-        return max(records, key=lambda r: r.record_id)
+        # Return the most-recent valid record as coordinator.data (shown on sensor entities)
+        return max(valid_records, key=lambda r: r.record_id)
 
     def _discover_command_char(self, client: BleakClient) -> str:
         """
@@ -429,6 +529,88 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
 
     # ── Statistics import ─────────────────────────────────────────────────────
 
+    def _check_clock_skew(self, records: list[ProtimeterRecord]) -> None:
+        """
+        Detect small RTC offsets that the year-range check won't catch.
+
+        Two checks:
+          1. Most-recent record timestamp is more than CLOCK_SKEW_THRESHOLD_MINUTES
+             ahead of the host clock → device RTC is running fast.
+          2. Any consecutive pair of records (sorted by record_id) has a timestamp
+             that goes backwards → device clock was reset mid-recording.
+        """
+        from datetime import datetime as _dt  # noqa: PLC0415
+
+        def _as_dt(r: ProtimeterRecord) -> _dt | None:
+            try:
+                return _dt(r.year, r.month, r.day, r.hour, r.minute, r.second)
+            except ValueError:
+                return None
+
+        sorted_records = sorted(records, key=lambda r: r.record_id)
+        now_naive = dt_util.now().replace(tzinfo=None)
+
+        # Check 1 — most-recent record in the future
+        most_recent_dt = _as_dt(sorted_records[-1])
+        if most_recent_dt is not None:
+            skew_minutes = (most_recent_dt - now_naive).total_seconds() / 60
+            if skew_minutes > CLOCK_SKEW_THRESHOLD_MINUTES:
+                msg = (
+                    f"The most recent record is timestamped "
+                    f"{most_recent_dt.strftime('%Y-%m-%d %H:%M')} but the current time is "
+                    f"{now_naive.strftime('%Y-%m-%d %H:%M')} "
+                    f"({skew_minutes:.0f} min ahead). "
+                    f"The device RTC may have drifted. "
+                    f"Press **Set device clock** on the device page to correct it."
+                )
+                _LOGGER.warning("Protimeter %s: clock skew detected — %s", self.address, msg)
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": f"Protimeter {self.address}: clock drift detected",
+                            "message": msg,
+                            "notification_id": self._clock_notification_id,
+                        },
+                        blocking=False,
+                    )
+                )
+                return
+
+        # Check 2 — timestamps going backwards between consecutive records
+        prev_dt: _dt | None = None
+        for rec in sorted_records:
+            rec_dt = _as_dt(rec)
+            if rec_dt is None:
+                continue
+            if prev_dt is not None and rec_dt < prev_dt:
+                msg = (
+                    f"Record {rec.record_id} has timestamp "
+                    f"{rec_dt.strftime('%Y-%m-%d %H:%M')} which is before the previous "
+                    f"record ({prev_dt.strftime('%Y-%m-%d %H:%M')}). "
+                    f"The device RTC was likely reset during recording. "
+                    f"Press **Set device clock** on the device page to correct it."
+                )
+                _LOGGER.warning(
+                    "Protimeter %s: clock went backwards at record %d — %s",
+                    self.address, rec.record_id, msg,
+                )
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": f"Protimeter {self.address}: clock reset detected",
+                            "message": msg,
+                            "notification_id": self._clock_notification_id,
+                        },
+                        blocking=False,
+                    )
+                )
+                return
+            prev_dt = rec_dt
+
     def _import_statistics(self, records: list[ProtimeterRecord]) -> None:
         """
         Import records as HA long-term statistics (external, source=DOMAIN).
@@ -475,6 +657,14 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         }
         skipped = 0
         for rec in records:
+            if rec.year < 2020:
+                _LOGGER.warning(
+                    "Protimeter %s: skipping record %d with implausible year %d "
+                    "(device RTC may have reset after battery swap)",
+                    self.address, rec.record_id, rec.year,
+                )
+                skipped += 1
+                continue
             try:
                 naive_local = datetime(
                     rec.year, rec.month, rec.day,

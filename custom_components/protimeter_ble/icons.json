@@ -3,6 +3,9 @@
     "button": {
       "fetch_history": {
         "default": "mdi:download"
+      },
+      "set_clock": {
+        "default": "mdi:clock-edit-outline"
       }
     },
     "sensor": {
