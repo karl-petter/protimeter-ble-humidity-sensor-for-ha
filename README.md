@@ -10,6 +10,8 @@ as HA statistics for graphing and automations.
 
 ![Integration card](docs/images/screenshot-integrations.png)
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=karl-petter&repository=protimeter-ble-humidity-sensor-for-ha&category=integration)
+
 ---
 
 ## Features
