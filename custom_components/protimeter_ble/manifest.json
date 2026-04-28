@@ -1,12 +1,6 @@
 {
   "domain": "protimeter_ble",
   "name": "Protimeter BLE",
-  "version": "1.0.0",
-  "config_flow": true,
-  "documentation": "https://github.com/karl-petter/protimeter-ble-humidity-sensor-for-ha",
-  "issue_tracker": "https://github.com/karl-petter/protimeter-ble-humidity-sensor-for-ha/issues",
-  "iot_class": "local_polling",
-  "dependencies": ["bluetooth"],
   "after_dependencies": ["recorder"],
   "bluetooth": [
     {
@@ -17,5 +11,11 @@
     }
   ],
   "codeowners": ["@karl-petter"],
-  "requirements": ["bleak-retry-connector>=3.0.0"]
+  "config_flow": true,
+  "dependencies": ["bluetooth"],
+  "documentation": "https://github.com/karl-petter/protimeter-ble-humidity-sensor-for-ha",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/karl-petter/protimeter-ble-humidity-sensor-for-ha/issues",
+  "requirements": ["bleak-retry-connector>=3.0.0"],
+  "version": "1.0.0"
 }
