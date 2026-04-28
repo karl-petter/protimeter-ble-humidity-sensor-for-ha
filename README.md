@@ -1,6 +1,6 @@
 # Protimeter BLE — Home Assistant Integration
 
-A Home Assistant custom integration for the **[Protimeter BLE humidity sensor](https://www.protimeter.com/products/protimeter-bluetooth-le-hygrometer/)**.
+A Home Assistant custom integration for the **[Protimeter BLE humidity sensor](https://www.protimeter.com/ble)**.
 
 ![Protimeter BLE sensor mounted in a wall cavity](docs/images/device-photo.jpg)
 
