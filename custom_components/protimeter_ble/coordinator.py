@@ -288,12 +288,18 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         current_year = dt_util.now().year
         valid_records = [r for r in records if 2020 <= r.year <= current_year + 1]
         bogus_records = [r for r in records if r not in valid_records]
-        if bogus_records:
+        # Only alert for genuinely new bogus records — overlap records that were
+        # already known to be bogus (record_id <= last_id) should not re-fire
+        # the notification after every restart/fetch.
+        new_bogus_records = [
+            r for r in bogus_records if last_id is None or r.record_id > last_id
+        ]
+        if new_bogus_records:
             _LOGGER.warning(
                 "Protimeter %s: %d record(s) have implausible timestamps "
                 "(years: %s) — device RTC may have reset after a battery swap",
-                self.address, len(bogus_records),
-                sorted({r.year for r in bogus_records}),
+                self.address, len(new_bogus_records),
+                sorted({r.year for r in new_bogus_records}),
             )
             self.hass.async_create_task(
                 self.hass.services.async_call(
@@ -302,8 +308,8 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                     {
                         "title": f"Protimeter {self.address}: clock needs setting",
                         "message": (
-                            f"{len(bogus_records)} record(s) have implausible timestamps "
-                            f"(years: {sorted({r.year for r in bogus_records})}). "
+                            f"{len(new_bogus_records)} record(s) have implausible timestamps "
+                            f"(years: {sorted({r.year for r in new_bogus_records})}). "
                             f"The device RTC likely reset after a battery swap. "
                             f"Press **Set device clock** on the device page to fix this."
                         ),
@@ -325,7 +331,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         # to now. Flag if it is more than CLOCK_SKEW_THRESHOLD_MINUTES in the future
         # (clock running fast) or if any consecutive records go backwards in time
         # (clock was reset mid-recording).
-        if not bogus_records:
+        if not new_bogus_records:
             self._check_clock_skew(valid_records)
 
         self._import_statistics(valid_records)
