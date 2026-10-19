@@ -9,9 +9,14 @@ See PROTOCOL.md for the full specification.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
-from .const import CURRENT_READING_LEN, HISTORY_RECORD_LEN
+from .const import (
+    CMD_READ_HISTORY,
+    CMD_WRITE_CLOCK,
+    CURRENT_READING_LEN,
+    HISTORY_RECORD_LEN,
+)
 
 
 # ── Lookup tables (from ByteHelper static constructor) ─────────────────────────
@@ -393,7 +398,7 @@ def parse_history_record(
     if not data or len(data) < HISTORY_RECORD_LEN:
         return None
 
-    century = (datetime.utcnow().year // 100) * 100
+    century = (datetime.now(timezone.utc).year // 100) * 100
     year = century + data[6]
 
     temp = _decode_temperature(data[14], data[15])
@@ -432,7 +437,7 @@ def build_set_clock_command(dt: "datetime") -> bytes:
     checksum = 0
     for b in payload:
         checksum ^= b
-    return bytes([0x54] + payload + [checksum])
+    return bytes(CMD_WRITE_CLOCK + bytes(payload) + bytes([checksum]))
 
 
 def build_history_request(start: int, end: int) -> bytes:
@@ -443,4 +448,4 @@ def build_history_request(start: int, end: int) -> bytes:
     s_hi, s_lo = (start >> 8) & 0xFF, start & 0xFF
     e_hi, e_lo = (end   >> 8) & 0xFF, end   & 0xFF
     checksum   = s_hi ^ s_lo ^ e_hi ^ e_lo
-    return bytes([0x52, s_hi, s_lo, e_hi, e_lo, checksum])
+    return CMD_READ_HISTORY + bytes([s_hi, s_lo, e_hi, e_lo, checksum])
