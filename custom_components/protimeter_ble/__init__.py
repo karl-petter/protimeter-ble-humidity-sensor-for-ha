@@ -40,8 +40,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _async_update_options_listener(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> None:
-    """Reload the config entry when options are updated."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Reload the config entry, but only if entry.options actually changed.
+
+    This listener also fires for entry.data-only writes (the coordinator
+    persists CONF_LAST_RECORD_ID after every fetch), which must not reload
+    the entry - see ProtimeterCoordinator.should_reload_for_options.
+    """
+    coordinator: ProtimeterCoordinator = hass.data[DOMAIN][entry.entry_id]
+    if coordinator.should_reload_for_options(entry):
+        await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
