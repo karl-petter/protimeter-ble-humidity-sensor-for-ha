@@ -70,6 +70,10 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         addr_slug = self.address.lower().replace(":", "")
         self._notification_id = f"protimeter_ble_{addr_slug}_error"
         self._clock_notification_id = f"protimeter_ble_{addr_slug}_clock"
+        # Snapshot so the update listener can tell a real options-flow change
+        # (e.g. fetch interval) apart from the entry.data-only write that
+        # happens after every fetch (see _do_fetch's CONF_LAST_RECORD_ID update).
+        self._options_at_setup: dict[str, object] = dict(entry.options)
         fetch_days: int = entry.options.get(
             CONF_FETCH_INTERVAL_DAYS,
             entry.data.get(CONF_FETCH_INTERVAL_DAYS, DEFAULT_FETCH_INTERVAL_DAYS),
@@ -146,6 +150,15 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
     def last_record_id(self) -> int | None:
         """Record ID of the last successfully imported record, or None on first run."""
         return self._entry.data.get(CONF_LAST_RECORD_ID)
+
+    def should_reload_for_options(self, entry: ConfigEntry) -> bool:
+        """Return True if entry.options changed since setup (a real options-flow edit).
+
+        Used by the config-entry update listener to ignore entry.data-only
+        writes (CONF_LAST_RECORD_ID after each fetch), which would otherwise
+        reload the entry and start a needless second BLE connection.
+        """
+        return dict(entry.options) != self._options_at_setup
 
     # ── DataUpdateCoordinator interface ───────────────────────────────────────
 
