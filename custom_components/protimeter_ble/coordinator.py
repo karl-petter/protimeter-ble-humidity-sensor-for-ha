@@ -293,7 +293,13 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                 f"Protimeter {self.address}: BLE error during read — {exc}"
             ) from exc
         finally:
-            await client.disconnect()
+            try:
+                await client.disconnect()
+            except (asyncio.TimeoutError, BleakError) as exc:
+                _LOGGER.debug(
+                    "Protimeter %s: error disconnecting (ignored) — %s",
+                    self.address, exc,
+                )
 
         if not records:
             return self.data
