@@ -18,5 +18,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/karl-petter/protimeter-ble-humidity-sensor-for-ha/issues",
   "requirements": ["bleak-retry-connector>=3.0.0"],
-  "version": "1.0.2"
+  "version": "1.0.3"
 }
