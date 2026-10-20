@@ -44,6 +44,18 @@ as HA statistics for graphing and automations.
 
 ### HACS (recommended)
 
+Protimeter BLE is in the [HACS default repository list](https://github.com/hacs/default):
+
+1. Open HACS → **Integrations**
+2. Search for **Protimeter BLE** and install
+3. Restart Home Assistant
+
+Just got approved and not showing up yet? It can take up to 8 hours for a newly
+approved repository to propagate to HACS. Use the custom-repository fallback
+below in the meantime.
+
+#### Fallback: custom repository
+
 1. Open HACS → **Integrations** → ⋮ → **Custom repositories**
 2. Add this repository URL, category **Integration**
 3. Search for **Protimeter BLE** and install
