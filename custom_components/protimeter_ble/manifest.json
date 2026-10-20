@@ -10,6 +10,7 @@
       "local_name": "Protimeter_*"
     }
   ],
+  "categories": ["sensors.temperature_humidity"],
   "codeowners": ["@karl-petter"],
   "config_flow": true,
   "dependencies": ["bluetooth"],
