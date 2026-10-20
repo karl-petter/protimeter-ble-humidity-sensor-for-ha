@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ADDRESS, DOMAIN
+from .const import DOMAIN
 from .coordinator import ProtimeterCoordinator
 
 _LOGGER = logging.getLogger(__name__)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -25,6 +26,8 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_MAC_ADDRESS_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 
 # Choices shown in the fetch-interval selector (values are days)
 FETCH_INTERVAL_OPTIONS = {
@@ -162,15 +165,18 @@ class ProtimeterConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             address = user_input[CONF_ADDRESS].upper().strip()
-            await self.async_set_unique_id(address)
-            self._abort_if_unique_id_configured()
-            return self._create_entry(
-                address=address,
-                name=user_input.get(CONF_NAME) or DEFAULT_NAME,
-                fetch_interval_days=user_input.get(
-                    CONF_FETCH_INTERVAL_DAYS, DEFAULT_FETCH_INTERVAL_DAYS
-                ),
-            )
+            if not _MAC_ADDRESS_RE.match(address):
+                errors["base"] = "invalid_address"
+            else:
+                await self.async_set_unique_id(address)
+                self._abort_if_unique_id_configured()
+                return self._create_entry(
+                    address=address,
+                    name=user_input.get(CONF_NAME) or DEFAULT_NAME,
+                    fetch_interval_days=user_input.get(
+                        CONF_FETCH_INTERVAL_DAYS, DEFAULT_FETCH_INTERVAL_DAYS
+                    ),
+                )
 
         return self.async_show_form(
             step_id="manual",

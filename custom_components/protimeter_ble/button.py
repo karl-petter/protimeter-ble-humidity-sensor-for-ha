@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -22,8 +20,8 @@ async def async_setup_entry(
     """Set up button entities from a config entry."""
     coordinator: ProtimeterCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([
-        ProtimeterFetchButton(coordinator, entry),
-        ProtimeterSetClockButton(coordinator, entry),
+        ProtimeterFetchButton(coordinator),
+        ProtimeterSetClockButton(coordinator),
     ])
 
 
@@ -34,19 +32,10 @@ class ProtimeterFetchButton(CoordinatorEntity[ProtimeterCoordinator], ButtonEnti
     _attr_translation_key = "fetch_history"
     _attr_name = "Fetch history"
 
-    def __init__(
-        self,
-        coordinator: ProtimeterCoordinator,
-        entry: ConfigEntry,
-    ) -> None:
+    def __init__(self, coordinator: ProtimeterCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.address}_fetch_history"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.address)},
-            name=entry.data.get(CONF_NAME, coordinator.address),
-            manufacturer="Protimeter",
-            model="BLE Humidity Sensor",
-        )
+        self._attr_device_info = coordinator.device_info
 
     @property
     def available(self) -> bool:
@@ -69,19 +58,10 @@ class ProtimeterSetClockButton(CoordinatorEntity[ProtimeterCoordinator], ButtonE
     _attr_translation_key = "set_clock"
     _attr_name = "Set device clock"
 
-    def __init__(
-        self,
-        coordinator: ProtimeterCoordinator,
-        entry: ConfigEntry,
-    ) -> None:
+    def __init__(self, coordinator: ProtimeterCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.address}_set_clock"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.address)},
-            name=entry.data.get(CONF_NAME, coordinator.address),
-            manufacturer="Protimeter",
-            model="BLE Humidity Sensor",
-        )
+        self._attr_device_info = coordinator.device_info
 
     @property
     def available(self) -> bool:

@@ -13,13 +13,8 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_NAME,
-    PERCENTAGE,
-    UnitOfTemperature,
-)
+from homeassistant.const import PERCENTAGE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import homeassistant.util.dt as dt_util
@@ -86,10 +81,10 @@ async def async_setup_entry(
     """Set up sensor entities from a config entry."""
     coordinator: ProtimeterCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list[SensorEntity] = [
-        ProtimeterSensor(coordinator, entry, desc)
+        ProtimeterSensor(coordinator, desc)
         for desc in SENSOR_DESCRIPTIONS
     ]
-    entities.append(ProtimeterTimestampSensor(coordinator, entry))
+    entities.append(ProtimeterTimestampSensor(coordinator))
     async_add_entities(entities)
 
 
@@ -109,18 +104,12 @@ class ProtimeterSensor(
     def __init__(
         self,
         coordinator: ProtimeterCoordinator,
-        entry: ConfigEntry,
         description: ProtimeterSensorDescription,
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.address}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.address)},
-            name=entry.data.get(CONF_NAME, coordinator.address),
-            manufacturer="Protimeter",
-            model="BLE Humidity Sensor",
-        )
+        self._attr_device_info = coordinator.device_info
 
     @property
     def available(self) -> bool:
@@ -145,19 +134,10 @@ class ProtimeterTimestampSensor(
     _attr_translation_key = "last_reading"
     _attr_name = "Last reading"
 
-    def __init__(
-        self,
-        coordinator: ProtimeterCoordinator,
-        entry: ConfigEntry,
-    ) -> None:
+    def __init__(self, coordinator: ProtimeterCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.address}_last_reading"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.address)},
-            name=entry.data.get(CONF_NAME, coordinator.address),
-            manufacturer="Protimeter",
-            model="BLE Humidity Sensor",
-        )
+        self._attr_device_info = coordinator.device_info
 
     @property
     def available(self) -> bool:
