@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ADDRESS, DOMAIN
+from .const import DOMAIN
 from .coordinator import ProtimeterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,7 +27,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # blocked. Sensor entities will show "unavailable" until the fetch completes.
     # Subsequent fetches run on the coordinator's normal schedule (weekly by default),
     # or when the user presses the "Fetch history" button.
-    hass.async_create_task(coordinator.async_refresh())
+    # Tied to the entry via async_create_background_task so a reload/unload
+    # while this first fetch is still running cancels it instead of leaving
+    # it to race a second connection from the freshly (re)loaded coordinator.
+    entry.async_create_background_task(
+        hass, coordinator.async_refresh(), name=f"{DOMAIN}_{entry.entry_id}_initial_fetch"
+    )
 
     # Reload the entry when the user changes options (e.g. fetch interval)
     entry.async_on_unload(

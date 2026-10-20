@@ -32,7 +32,8 @@
       "already_in_progress": "Configuration is already in progress for this device."
     },
     "error": {
-      "cannot_connect": "Failed to connect to the device. Make sure it is nearby and not connected to another app."
+      "cannot_connect": "Failed to connect to the device. Make sure it is nearby and not connected to another app.",
+      "invalid_address": "Enter a valid Bluetooth MAC address (e.g. 00:22:A3:00:C7:57)."
     }
   },
   "options": {
@@ -42,6 +43,33 @@
         "data": {
           "fetch_interval_days": "History fetch interval"
         }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "humidity": {
+        "name": "Humidity"
+      },
+      "temperature": {
+        "name": "Temperature"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "wme": {
+        "name": "Wood Moisture Equivalent"
+      },
+      "last_reading": {
+        "name": "Last reading"
+      }
+    },
+    "button": {
+      "fetch_history": {
+        "name": "Fetch history"
+      },
+      "set_clock": {
+        "name": "Set device clock"
       }
     }
   }

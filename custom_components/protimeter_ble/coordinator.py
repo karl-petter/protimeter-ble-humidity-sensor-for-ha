@@ -12,18 +12,22 @@ from bleak import BleakClient, BleakError
 from bleak_retry_connector import establish_connection
 
 from homeassistant.components.bluetooth import async_ble_device_from_address
-from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.const import CONF_NAME, PERCENTAGE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 import homeassistant.util.dt as dt_util
 
 from .const import (
+    BLE_CONNECT_TIMEOUT_S,
     BLE_RESPONSE_TIMEOUT_S,
     CLOCK_SKEW_THRESHOLD_MINUTES,
     CMD_READ_CALIB,
     CMD_READ_COUNT,
     COMMAND_CHAR_UUID,
     COMMAND_SERVICE_UUID,
+    CONF_ADDRESS,
     CONF_FETCH_INTERVAL_DAYS,
     CONF_LAST_RECORD_ID,
     DEFAULT_FETCH_INTERVAL_DAYS,
@@ -63,13 +67,13 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._entry = entry
-        self.address: str = entry.data["address"].upper()
+        self.address: str = entry.data[CONF_ADDRESS].upper()
         self._fetching: bool = False
         self._setting_clock: bool = False
         self._consecutive_failures: int = 0
-        addr_slug = self.address.lower().replace(":", "")
-        self._notification_id = f"protimeter_ble_{addr_slug}_error"
-        self._clock_notification_id = f"protimeter_ble_{addr_slug}_clock"
+        self._addr_slug = self.address.lower().replace(":", "")
+        self._notification_id = f"protimeter_ble_{self._addr_slug}_error"
+        self._clock_notification_id = f"protimeter_ble_{self._addr_slug}_clock"
         # Snapshot so the update listener can tell a real options-flow change
         # (e.g. fetch interval) apart from the entry.data-only write that
         # happens after every fetch (see _do_fetch's CONF_LAST_RECORD_ID update).
@@ -108,7 +112,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
 
         self._setting_clock = True
         self.async_update_listeners()
-        _LOGGER.warning("Protimeter %s: setting device clock", self.address)
+        _LOGGER.debug("Protimeter %s: setting device clock", self.address)
 
         try:
             device = async_ble_device_from_address(
@@ -119,13 +123,15 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                     f"Protimeter {self.address}: device not found — cannot set clock"
                 )
 
-            client = await establish_connection(BleakClient, device, self.address)
+            client = await establish_connection(
+                BleakClient, device, self.address, timeout=BLE_CONNECT_TIMEOUT_S
+            )
             try:
                 cmd_uuid = self._discover_command_char(client)
                 now = dt_util.now().replace(tzinfo=None)  # local naive time
                 cmd = build_set_clock_command(now)
                 await client.write_gatt_char(cmd_uuid, cmd, response=True)
-                _LOGGER.warning(
+                _LOGGER.info(
                     "Protimeter %s: clock set to %s", self.address, now.strftime("%Y-%m-%d %H:%M:%S")
                 )
             finally:
@@ -150,6 +156,17 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
     def last_record_id(self) -> int | None:
         """Record ID of the last successfully imported record, or None on first run."""
         return self._entry.data.get(CONF_LAST_RECORD_ID)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Shared device metadata for all of this device's entities."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.address)},
+            connections={(dr.CONNECTION_BLUETOOTH, self.address)},
+            name=self._entry.data.get(CONF_NAME, self.address),
+            manufacturer="Protimeter",
+            model="BLE Humidity Sensor",
+        )
 
     def should_reload_for_options(self, entry: ConfigEntry) -> bool:
         """Return True if entry.options changed since setup (a real options-flow edit).
@@ -178,7 +195,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
 
         self._fetching = True
         self.async_update_listeners()
-        _LOGGER.warning("Protimeter %s: starting history fetch", self.address)
+        _LOGGER.debug("Protimeter %s: starting history fetch", self.address)
 
         try:
             result = await self._do_fetch()
@@ -240,7 +257,9 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                       getattr(device, "rssi", "?"))
 
         try:
-            client = await establish_connection(BleakClient, device, self.address)
+            client = await establish_connection(
+                BleakClient, device, self.address, timeout=BLE_CONNECT_TIMEOUT_S
+            )
         except (asyncio.TimeoutError, BleakError) as exc:
             raise UpdateFailed(
                 f"Protimeter {self.address}: failed to connect — {exc}"
@@ -293,7 +312,13 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
                 f"Protimeter {self.address}: BLE error during read — {exc}"
             ) from exc
         finally:
-            await client.disconnect()
+            try:
+                await client.disconnect()
+            except (asyncio.TimeoutError, BleakError) as exc:
+                _LOGGER.debug(
+                    "Protimeter %s: error disconnecting (ignored) — %s",
+                    self.address, exc,
+                )
 
         if not records:
             return self.data
@@ -558,11 +583,9 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
           2. Any consecutive pair of records (sorted by record_id) has a timestamp
              that goes backwards → device clock was reset mid-recording.
         """
-        from datetime import datetime as _dt  # noqa: PLC0415
-
-        def _as_dt(r: ProtimeterRecord) -> _dt | None:
+        def _as_dt(r: ProtimeterRecord) -> datetime | None:
             try:
-                return _dt(r.year, r.month, r.day, r.hour, r.minute, r.second)
+                return datetime(r.year, r.month, r.day, r.hour, r.minute, r.second)
             except ValueError:
                 return None
 
@@ -659,8 +682,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
             )
             return
 
-        device_name = self._entry.data.get("name", self.address)
-        addr_slug = self.address.lower().replace(":", "")
+        device_name = self._entry.data.get(CONF_NAME, self.address)
 
         # (key, unit, human label)
         sensors: list[tuple[str, str, str]] = [
@@ -676,14 +698,6 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
         }
         skipped = 0
         for rec in records:
-            if rec.year < 2020:
-                _LOGGER.warning(
-                    "Protimeter %s: skipping record %d with implausible year %d "
-                    "(device RTC may have reset after battery swap)",
-                    self.address, rec.record_id, rec.year,
-                )
-                skipped += 1
-                continue
             try:
                 naive_local = datetime(
                     rec.year, rec.month, rec.day,
@@ -722,7 +736,7 @@ class ProtimeterCoordinator(DataUpdateCoordinator[ProtimeterRecord | None]):
             if not stats:
                 continue
 
-            statistic_id = f"{DOMAIN}:{addr_slug}_{key}"
+            statistic_id = f"{DOMAIN}:{self._addr_slug}_{key}"
 
             # Build metadata — try both old (has_mean) and new (mean_type) API
             try:

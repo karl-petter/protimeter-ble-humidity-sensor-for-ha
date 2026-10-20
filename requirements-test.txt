@@ -1,0 +1,16 @@
+pytest-homeassistant-custom-component==0.13.281
+
+# homeassistant.components.bluetooth (a manifest.json dependency) pulls in
+# homeassistant.components.usb at import time, which needs these even though
+# this integration itself never touches USB or DNS-over-dbus:
+pyserial==3.5
+serialx==1.14.0
+aiousbwatcher==1.1.2
+
+# bluetooth_adapters' dbus backend; not installed transitively on all
+# platforms, but required for homeassistant.components.bluetooth to set up
+# cleanly in tests.
+dbus-fast==5.2.0
+
+# aiodns 3.5.0 is incompatible with pycares 5.x (used by aiohttp's DNS resolver).
+pycares==4.11.0

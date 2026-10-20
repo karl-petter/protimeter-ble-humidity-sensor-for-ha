@@ -1,28 +1,21 @@
 """
-Stub out all Home Assistant and BLE dependencies so parser.py can be imported
-in a plain Python / pytest environment without a running HA instance.
+Shared pytest fixtures for the Protimeter BLE test suite.
+
+Parser tests (test_parser.py) exercise pure functions and happen to pull in
+the whole custom_components.protimeter_ble package on import (importing a
+submodule always runs the package's __init__.py first), which is why the
+real `homeassistant`/`bleak` packages below are needed even for those.
+
+Integration tests (test_init.py and friends) exercise config-entry
+setup/unload/reload against a real, test-mode Home Assistant core, provided
+by the pytest-homeassistant-custom-component plugin (auto-registered via its
+pytest11 entry point - no explicit pytest_plugins line needed).
 """
 
-import sys
-from unittest.mock import MagicMock
+import pytest
 
-_HA_STUBS = [
-    "homeassistant",
-    "homeassistant.components",
-    "homeassistant.components.bluetooth",
-    "homeassistant.components.sensor",
-    "homeassistant.config_entries",
-    "homeassistant.const",
-    "homeassistant.core",
-    "homeassistant.helpers",
-    "homeassistant.helpers.device_registry",
-    "homeassistant.helpers.entity_platform",
-    "homeassistant.helpers.update_coordinator",
-    "homeassistant.util",
-    "homeassistant.util.dt",
-    "bleak",
-    "bleak_retry_connector",
-]
 
-for _mod in _HA_STUBS:
-    sys.modules.setdefault(_mod, MagicMock())
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    """Let Home Assistant load custom_components/ during tests."""
+    yield

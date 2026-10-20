@@ -4,13 +4,17 @@
 
 ## Development environment
 
-No Home Assistant installation is required to work on the parser or run tests.
+Parser tests need no Home Assistant installation. Integration tests (config-entry setup/unload, the options-update listener) run against a real, test-mode Home Assistant core via [pytest-homeassistant-custom-component](https://pypi.org/project/pytest-homeassistant-custom-component/), which is a heavy dependency best kept in its own virtualenv:
 
 ```bash
 git clone <repo>
 cd protimeter-ble-humidity-sensor-for-ha
-pip install pytest
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-test.txt
 ```
+
+`pytest-homeassistant-custom-component` pins an exact `homeassistant` core version; see `requirements-test.txt` for the tested combination and its extra platform dependencies (needed because `homeassistant.components.bluetooth` pulls in `homeassistant.components.usb` at import time, regardless of whether a test touches USB).
 
 The integration itself requires HA to be running. Use `deploy.sh` to push changes
 to a local HA instance over SSH:
@@ -31,13 +35,11 @@ Protimeter BLE → ⋮ → Reload**.
 pytest tests/
 ```
 
-Tests use real BLE notification bytes captured from the device and
-cross-referenced against the official app. No HA or BLE hardware needed.
+- `tests/test_parser.py` uses real BLE notification bytes captured from the device and cross-referenced against the official app. No HA or BLE hardware needed.
+- `tests/test_update_listener.py` pins the config-entry update listener's control flow (data-only writes must not reload the entry; options-flow changes must) against a fake coordinator — no HA core needed.
+- `tests/test_init.py` exercises the same listener through a real `hass.config_entries.async_setup()`/`async_update_entry()`/`async_unload()` cycle, proving the fake-coordinator assumptions in `test_update_listener.py` hold against real Home Assistant.
 
-`tests/conftest.py` stubs out all `homeassistant` and `bleak` modules so
-`parser.py` can be imported in a plain Python environment.
-
-To add a new test case: capture raw R-command notification bytes from the HA
+To add a new parser test case: capture raw R-command notification bytes from the HA
 debug log, create a `CalibrationOffset` list from the O-command log entries,
 and assert against app-confirmed values.
 
