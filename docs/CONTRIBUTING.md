@@ -24,6 +24,8 @@ to a local HA instance over SSH:
 # e.g. ./deploy.sh homeassistant homeassistant.local
 ```
 
+With no arguments, `deploy.sh` falls back to `HA_SSH_USER`/`HA_SSH_HOST`/`HA_SSH_PORT` from a local `.env` file (copy `.env.example`, gitignored, never commit real values).
+
 Then reload the integration in HA: **Settings → Devices & Services →
 Protimeter BLE → ⋮ → Reload**.
 

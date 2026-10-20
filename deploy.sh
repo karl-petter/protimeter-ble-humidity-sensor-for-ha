@@ -1,24 +1,41 @@
 #!/bin/bash
 set -e
 
-# Usage: ./deploy.sh <user> <host>
-# Example: ./deploy.sh hassio homeassistant.local
-if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Usage: $0 <user> <host>"
+# Usage: ./deploy.sh [user] [host]
+# Example: ./deploy.sh homeassistant homeassistant.local
+# With no arguments, falls back to HA_SSH_USER/HA_SSH_HOST(/HA_SSH_PORT)
+# from .env - see .env.example.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/.env"
+  set +a
+fi
+
+USER="${1:-$HA_SSH_USER}"
+HOST_ARG="${2:-$HA_SSH_HOST}"
+
+if [ -z "$USER" ] || [ -z "$HOST_ARG" ]; then
+  echo "Usage: $0 <user> <host>  (or set HA_SSH_USER/HA_SSH_HOST in .env)"
   exit 1
 fi
 
-USER="$1"
-HOST_ARG="$2"
+SSH_PORT_ARGS=()
+if [ -n "$HA_SSH_PORT" ]; then
+  SSH_PORT_ARGS=(-p "$HA_SSH_PORT")
+fi
+
 HOST="$USER@$HOST_ARG"
 REMOTE_DIR="/config/custom_components/protimeter_ble"
 
 echo "==> Creating remote directories..."
-ssh -o BatchMode=yes "$HOST" "sudo mkdir -p $REMOTE_DIR/translations && sudo chmod 777 $REMOTE_DIR/translations $REMOTE_DIR"
+ssh -o BatchMode=yes "${SSH_PORT_ARGS[@]}" "$HOST" "sudo mkdir -p $REMOTE_DIR/translations $REMOTE_DIR/brand && sudo chmod -R 777 $REMOTE_DIR"
 
 echo "==> Syncing files..."
-rsync -av --exclude='__pycache__' --exclude='.DS_Store' \
+rsync -av --no-perms --no-owner --no-group --omit-dir-times --delete -e "ssh ${SSH_PORT_ARGS[*]}" --exclude='__pycache__' --exclude='.DS_Store' \
   custom_components/protimeter_ble/ \
   "$HOST:$REMOTE_DIR/"
 
 echo "==> Done! Reload the integration in HA: Settings → Devices & Services → Protimeter BLE → (3 dots) → Reload."
+echo "    Or restart HA if this is a first install."
